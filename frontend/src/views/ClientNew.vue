@@ -86,7 +86,7 @@ async function onSubmit() {
 <style scoped>
 .form-page {
   max-width: 760px;
-  padding: 32px 24px 64px;
+  padding: 16px 24px 64px;
 }
 header {
   display: flex;

@@ -102,6 +102,17 @@ class ClientsResponse(BaseModel):
     clients: List[ClientPublic]
 
 
+class ClientMetrics(BaseModel):
+    client_id: int
+    unprocessed_invoices: int = 0
+    unreconciled_bank_entries: int = 0
+    missing_2307s: int = 0
+
+
+class ClientMetricsResponse(BaseModel):
+    metrics: List[ClientMetrics]
+
+
 class ReceiptDataPublic(BaseModel):
     vendor: Optional[str] = None
     vendor_tin: Optional[str] = None
@@ -240,9 +251,27 @@ class ReconciliationPublic(BaseModel):
     status: str
     match_score: Optional[float] = None
     requires_2307: str
+    form_2307_status: str = "missing"
+    form_2307_original_name: Optional[str] = None
+    form_2307_mime_type: Optional[str] = None
+    form_2307_uploaded_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ReconciliationDetailPublic(ReconciliationPublic):
+    receipt: ReceiptPublic
+    bank_transaction: BankTransactionPublic
+    has_form_2307_file: bool = False
+
+
+class ReconciliationsResponse(BaseModel):
+    reconciliations: List[ReconciliationDetailPublic]
+
+
+class Form2307UpdateRequest(BaseModel):
+    status: str = Field(pattern=r"^(missing|requested|received|attached)$")
 
 
 class BulkCategorizeRequest(BaseModel):

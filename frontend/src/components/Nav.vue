@@ -1,11 +1,15 @@
 <template>
-  <nav>
+  <nav :class="{ 'app-nav': isAppRoute }">
     <div class="container nav-inner">
-      <router-link to="/" class="brand">
-        <span class="logo">C</span>
-        <span>Claideco</span>
+      <router-link :to="isAppRoute ? '/app' : '/'" class="brand">
+        <span class="logo">{{ isAppRoute ? 'P' : 'C' }}</span>
+        <span>{{ isAppRoute ? 'PesoBooks' : 'Claideco' }}</span>
       </router-link>
-      <div class="links">
+      <div v-if="isAppRoute" class="links app-links">
+        <router-link to="/app/clients/new" class="primary-link">New client</router-link>
+        <button type="button" @click="logout">Log out</button>
+      </div>
+      <div v-else class="links">
         <router-link to="/products">Products</router-link>
         <router-link to="/docs">Docs</router-link>
         <router-link to="/about">About</router-link>
@@ -16,6 +20,21 @@
   </nav>
 </template>
 
+<script setup>
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { clearToken } from '../api'
+
+const route = useRoute()
+const router = useRouter()
+const isAppRoute = computed(() => route.path.startsWith('/app'))
+
+function logout() {
+  clearToken()
+  router.push('/login')
+}
+</script>
+
 <style scoped>
 nav {
   border-bottom: 1px solid var(--border);
@@ -24,6 +43,12 @@ nav {
   position: sticky;
   top: 0;
   z-index: 10;
+}
+nav.app-nav {
+  padding: 12px 0;
+}
+nav.app-nav .nav-inner {
+  max-width: var(--app-max-width);
 }
 .nav-inner {
   display: flex;
@@ -52,6 +77,7 @@ nav {
 }
 .links {
   display: flex;
+  align-items: center;
   gap: 24px;
 }
 .links a {
@@ -64,6 +90,35 @@ nav {
 }
 .signup-link {
   color: var(--text) !important;
+}
+.app-links {
+  gap: 14px;
+}
+.app-links button,
+.primary-link {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 14px;
+}
+.primary-link {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white !important;
+  font-weight: 600;
+}
+.primary-link:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  color: white !important;
+}
+.app-links button:hover {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--accent);
 }
 
 @media (max-width: 720px) {

@@ -15,15 +15,18 @@ PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It curren
 - Bookkeeper signup/login with JWT auth.
 - Multi-client workspace.
 - Batch receipt/invoice upload.
-- Image OCR and PH/BIR-aware OpenAI extraction.
+- Image/PDF OCR and PH/BIR-aware OpenAI extraction.
 - Review queue with editable extracted fields.
-- Receipt archive with filters.
+- Receipt archive with filters and read-only document detail.
 - CSV export for Generic, QuickBooks, and Xero formats.
 - Bank CSV import.
 - Reconciliation match suggestions, including 1%/2% withholding variance detection.
+- Reconciled transaction view with undo/unmatch and manual receipt search.
+- Form 2307 status tracking and attachment workflow.
+- Dashboard metrics for unprocessed invoices, unreconciled bank entries, and missing 2307s.
 - Bulk bank transaction categorization.
 
-PDF files are stored, but PDF OCR/rendering is not implemented yet.
+PDF files are stored, previewed in the browser, and OCRed by rendering pages with PyMuPDF.
 
 ## Prerequisites
 
@@ -34,6 +37,7 @@ PDF files are stored, but PDF OCR/rendering is not implemented yet.
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
 4. OpenAI API key for extraction.
+5. PyMuPDF is installed from `backend/requirements.txt` for PDF OCR; no Poppler install is required.
 
 ## Backend Setup
 
@@ -135,6 +139,7 @@ Auth:
 Clients:
 
 - `GET /v1/clients`
+- `GET /v1/clients/metrics`
 - `POST /v1/clients`
 - `GET /v1/clients/{id}`
 - `PUT /v1/clients/{id}`
@@ -158,7 +163,14 @@ Bank/reconciliation:
 - `POST /v1/clients/{id}/bank/import`
 - `GET /v1/clients/{id}/bank/transactions`
 - `GET /v1/clients/{id}/bank/transactions/{tx_id}/matches`
+- `GET /v1/clients/{id}/bank/transactions/{tx_id}/manual-matches?q=...`
 - `POST /v1/clients/{id}/bank/transactions/{tx_id}/reconcile`
+- `GET /v1/clients/{id}/bank/reconciliations`
+- `DELETE /v1/clients/{id}/bank/reconciliations/{reconciliation_id}`
+- `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true`
+- `PATCH /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307`
+- `POST /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file`
+- `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file?token=...`
 - `PATCH /v1/clients/{id}/bank/transactions/category`
 
 Legacy endpoint:
@@ -169,10 +181,8 @@ Legacy endpoint:
 
 See `PESOBOOKS_HANDOFF.md` for the fuller handoff. High-priority next slices:
 
-- Form 2307 tracking UI and backend fields.
-- Reconciled transactions view and undo/unmatch.
-- PDF OCR/rendering support.
-- Receipt archive read-only detail view.
-- Dashboard metrics.
 - Alembic migrations.
+- Better PH bank CSV templates for BDO/BPI/Metrobank/UnionBank.
+- Compliance exports: SLSP, SAWT, and 4-column journal.
+- Client portal upload links and clarification flow.
 - Docker deployment setup.

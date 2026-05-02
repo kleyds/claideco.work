@@ -1,10 +1,10 @@
 <template>
-  <div class="layout">
+  <div :class="['layout', { 'review-layout': isReviewRoute }]">
     <Nav />
-    <main>
+    <main :class="{ 'review-main': isReviewRoute }">
       <router-view />
     </main>
-    <footer>
+    <footer v-if="!isReviewRoute">
       <div class="container">
         <p>&copy; 2026 Claideco &middot; Independent software studio.</p>
       </div>
@@ -13,7 +13,12 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import Nav from './components/Nav.vue'
+
+const route = useRoute()
+const isReviewRoute = computed(() => route.name === 'client-review')
 </script>
 
 <style scoped>
@@ -24,7 +29,18 @@ import Nav from './components/Nav.vue'
 }
 main {
   flex: 1;
-  padding: 48px 0 96px;
+  padding: 16px 0 72px;
+}
+.review-layout {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+main.review-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 0;
 }
 footer {
   border-top: 1px solid var(--border);

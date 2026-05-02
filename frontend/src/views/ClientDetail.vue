@@ -10,39 +10,49 @@
 
     <p v-if="error" class="error">{{ error }}</p>
 
-    <section v-if="client" class="detail-grid">
-      <div>
-        <span>TIN</span>
-        <strong>{{ client.tin || 'Not set' }}</strong>
-      </div>
-      <div>
-        <span>Address</span>
-        <strong>{{ client.address || 'Not set' }}</strong>
-      </div>
-      <div>
-        <span>Industry</span>
-        <strong>{{ client.industry || 'Not set' }}</strong>
-      </div>
-      <div>
-        <span>Accounting software</span>
-        <strong>{{ softwareLabel(client.software) }}</strong>
-      </div>
-    </section>
+    <details v-if="client" class="client-details">
+      <summary>
+        <span>Client details</span>
+        <strong>{{ client.tin || 'TIN not set' }} · {{ softwareLabel(client.software) }}</strong>
+      </summary>
+      <section class="detail-grid">
+        <div>
+          <span>TIN</span>
+          <strong>{{ client.tin || 'Not set' }}</strong>
+        </div>
+        <div>
+          <span>Address</span>
+          <strong>{{ client.address || 'Not set' }}</strong>
+        </div>
+        <div>
+          <span>Industry</span>
+          <strong>{{ client.industry || 'Not set' }}</strong>
+        </div>
+        <div>
+          <span>Accounting software</span>
+          <strong>{{ softwareLabel(client.software) }}</strong>
+        </div>
+      </section>
+    </details>
 
     <section class="upload-panel">
       <div>
         <p class="eyebrow">Batch upload</p>
         <h2>Invoices and receipts</h2>
-        <p>Upload up to 50 JPEG, PNG, WebP, or PDF files. Image files will be queued for OCR extraction immediately.</p>
+        <p>Upload up to 50 JPEG, PNG, WebP, or PDF files. Documents will be queued for OCR extraction immediately.</p>
       </div>
       <form @submit.prevent="uploadFiles">
-        <input
-          ref="fileInput"
-          type="file"
-          multiple
-          accept="image/jpeg,image/png,image/webp,application/pdf"
-          @change="onFilesChange"
-        />
+        <label :class="['file-picker', { selected: selectedFiles.length > 0 }]">
+          <input
+            ref="fileInput"
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            @change="onFilesChange"
+          />
+          <span>Choose files</span>
+          <strong>{{ filePickerLabel }}</strong>
+        </label>
         <button type="submit" :disabled="uploading || selectedFiles.length === 0">
           {{ uploading ? 'Uploading...' : `Upload ${selectedFiles.length || ''}` }}
         </button>
@@ -98,7 +108,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiFetch, clearToken } from '../api'
 
@@ -112,6 +122,11 @@ const uploadMessage = ref('')
 const uploading = ref(false)
 const selectedFiles = ref([])
 const fileInput = ref(null)
+const filePickerLabel = computed(() => {
+  if (selectedFiles.value.length === 0) return 'No files selected'
+  if (selectedFiles.value.length === 1) return selectedFiles.value[0].name
+  return `${selectedFiles.value.length} files selected`
+})
 
 onMounted(async () => {
   try {
@@ -194,7 +209,7 @@ function formatConfidence(value) {
 
 <style scoped>
 .detail-page {
-  padding: 32px 24px 64px;
+  padding: 16px 24px 64px;
 }
 header {
   display: flex;
@@ -210,7 +225,7 @@ header {
   margin-bottom: 4px;
   text-transform: uppercase;
 }
-.detail-grid,
+.client-details,
 .workflows,
 .receipt-list {
   margin-top: 28px;
@@ -220,8 +235,50 @@ header {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
+.client-details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
+.client-details summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 14px 18px;
+}
+.client-details summary::-webkit-details-marker {
+  display: none;
+}
+.client-details summary span {
+  color: var(--text);
+  font-weight: 600;
+}
+.client-details summary strong {
+  color: var(--muted);
+  font-size: 0.9em;
+  font-weight: 500;
+}
+.client-details summary::after {
+  color: var(--muted);
+  content: "Show";
+  font-size: 0.85em;
+  margin-left: auto;
+}
+.client-details[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.client-details[open] summary::after {
+  content: "Hide";
+}
 .detail-grid {
-  margin-bottom: 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 14px;
 }
 .detail-grid div,
 .workflows a,
@@ -231,6 +288,20 @@ header {
   border-radius: 8px;
   color: var(--text);
   padding: 20px;
+}
+.workflows a {
+  transition: border-color 0.14s ease, background-color 0.14s ease, transform 0.08s ease;
+}
+.workflows a:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.workflows a:active {
+  transform: translateY(1px) scale(0.996);
+}
+.detail-grid div {
+  background: var(--bg);
+  padding: 14px;
 }
 .detail-grid span {
   color: var(--muted);
@@ -273,14 +344,52 @@ header {
   font-size: 0.94em;
 }
 .upload-panel form {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
   gap: 10px;
-  justify-content: flex-end;
+  justify-content: stretch;
+  min-width: min(420px, 100%);
 }
-input[type="file"] {
+.file-picker {
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--muted);
-  max-width: 320px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 48px;
+  padding: 6px;
+}
+.file-picker:hover,
+.file-picker.selected {
+  border-color: var(--accent);
+}
+.file-picker.selected strong {
+  color: var(--text);
+}
+.file-picker input {
+  display: none;
+}
+.file-picker span {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.92em;
+  font-weight: 600;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.file-picker strong {
+  font-size: 0.9em;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 button {
   border: 1px solid var(--border);
@@ -296,6 +405,7 @@ button[type="submit"] {
   border-color: var(--accent);
   color: white;
   font-weight: 600;
+  min-height: 48px;
 }
 button:disabled {
   cursor: wait;
@@ -361,7 +471,8 @@ th {
     grid-template-columns: 1fr;
   }
   .upload-panel form {
-    justify-content: flex-start;
+    grid-template-columns: 1fr;
+    min-width: 0;
   }
   table {
     display: block;

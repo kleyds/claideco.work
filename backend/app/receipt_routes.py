@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import csv
 import io
 import os
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
@@ -14,7 +17,7 @@ from app.auth import get_current_user, user_from_token
 from app.database import SessionLocal, get_db
 from app.extract import extract_receipt
 from app.models import Client, LineItemRecord, Receipt, ReceiptDataRecord, User
-from app.ocr import image_to_text
+from app.ocr import image_to_text, pdf_to_text
 from app.schemas import (
     ReceiptPatchRequest,
     ReceiptPublic,
@@ -57,7 +60,7 @@ def _receipt_or_404(receipt_id: int, user_id: int, db: Session) -> Receipt:
     return receipt
 
 
-def _extension(filename: str | None, content_type: str | None) -> str:
+def _extension(filename: Optional[str], content_type: Optional[str]) -> str:
     suffix = Path(filename or "").suffix.lower()
     if suffix in {".jpg", ".jpeg", ".png", ".webp", ".pdf"}:
         return suffix
@@ -79,13 +82,13 @@ def _next_month(month: str) -> str:
 def _receipt_statement(
     client_id: int,
     user_id: int,
-    status: str | None = None,
-    month: str | None = None,
-    vendor: str | None = None,
-    doc_type: str | None = None,
-    vat_type: str | None = None,
-    min_total: float | None = None,
-    max_total: float | None = None,
+    status: Optional[str] = None,
+    month: Optional[str] = None,
+    vendor: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    vat_type: Optional[str] = None,
+    min_total: Optional[float] = None,
+    max_total: Optional[float] = None,
 ):
     statement = (
         select(Receipt)
@@ -125,7 +128,7 @@ def _receipt_statement(
     return statement
 
 
-def _write_csv(headers: list[str], rows: list[list[object | None]]) -> str:
+def _write_csv(headers: list[str], rows: list[list[Optional[object]]]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(headers)
@@ -247,17 +250,19 @@ def process_receipt(receipt_id: int) -> None:
         receipt.error_message = None
         db.commit()
 
-        if receipt.mime_type not in IMAGE_TYPES:
-            receipt.status = "error"
-            receipt.error_message = "PDF extraction is not implemented yet; file is stored for later processing."
-            receipt.processed_at = datetime.utcnow()
-            db.commit()
-            return
-
         with open(receipt.file_path, "rb") as file:
             content = file.read()
 
-        raw_text = image_to_text(content)
+        if receipt.mime_type in IMAGE_TYPES:
+            raw_text = image_to_text(content)
+        elif receipt.mime_type == "application/pdf":
+            raw_text = pdf_to_text(content)
+        else:
+            raise ValueError(f"Unsupported file type: {receipt.mime_type}")
+
+        if not raw_text.strip():
+            raise ValueError("No OCR text could be extracted from this file.")
+
         receipt.raw_text = raw_text
         _persist_extracted_data(db, receipt, raw_text)
         receipt.status = "done"
@@ -342,13 +347,13 @@ async def upload_receipts(
 @router.get("/clients/{client_id}/receipts", response_model=ReceiptsResponse)
 def list_receipts(
     client_id: int,
-    status: str | None = None,
-    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
-    vendor: str | None = None,
-    doc_type: str | None = None,
-    vat_type: str | None = None,
-    min_total: float | None = None,
-    max_total: float | None = None,
+    status: Optional[str] = None,
+    month: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    vendor: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    vat_type: Optional[str] = None,
+    min_total: Optional[float] = None,
+    max_total: Optional[float] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -371,13 +376,13 @@ def list_receipts(
 @router.get("/clients/{client_id}/export")
 def export_receipts(
     client_id: int,
-    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    month: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$"),
     format: str = Query("generic", pattern=r"^(generic|qbo|xero)$"),
-    vendor: str | None = None,
-    doc_type: str | None = None,
-    vat_type: str | None = None,
-    min_total: float | None = None,
-    max_total: float | None = None,
+    vendor: Optional[str] = None,
+    doc_type: Optional[str] = None,
+    vat_type: Optional[str] = None,
+    min_total: Optional[float] = None,
+    max_total: Optional[float] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -444,7 +449,12 @@ def get_receipt_file(
     path = Path(receipt.file_path)
     if not path.exists():
         raise HTTPException(404, "Receipt file not found")
-    return FileResponse(path, media_type=receipt.mime_type, filename=receipt.original_name)
+    return FileResponse(
+        path,
+        media_type=receipt.mime_type,
+        filename=receipt.original_name,
+        content_disposition_type="inline",
+    )
 
 
 @router.patch("/receipts/{receipt_id}", response_model=ReceiptPublic)

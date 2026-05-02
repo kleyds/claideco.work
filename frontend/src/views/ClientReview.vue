@@ -14,8 +14,14 @@
     <p v-if="error" class="error">{{ error }}</p>
 
     <section v-if="loading" class="empty">Loading review queue...</section>
-    <section v-else-if="queue.length === 0" class="empty">
-      No receipts need review.
+    <section v-else-if="queue.length === 0" class="empty caught-up">
+      <div class="caught-up-icon">✓</div>
+      <h2>You're all caught up</h2>
+      <p>No receipts need review right now. Upload more receipts when a new batch comes in, or check the archive for approved documents.</p>
+      <div class="empty-actions">
+        <router-link :to="`/app/clients/${clientId}`">Upload more receipts</router-link>
+        <router-link :to="`/app/clients/${clientId}/archive`" class="secondary-link">Open archive</router-link>
+      </div>
     </section>
 
     <section v-else class="review-shell">
@@ -32,8 +38,8 @@
         </button>
       </aside>
 
-      <main class="document-pane">
-        <div class="document-toolbar">
+      <main :class="['document-pane', { 'has-toolbar': isImage(currentReceipt) }]">
+        <div v-if="isImage(currentReceipt)" class="document-toolbar">
           <button type="button" @click="zoom = Math.max(0.5, zoom - 0.1)">-</button>
           <span>{{ Math.round(zoom * 100) }}%</span>
           <button type="button" @click="zoom = Math.min(2, zoom + 0.1)">+</button>
@@ -45,9 +51,14 @@
             :style="{ transform: `scale(${zoom})` }"
             alt="Uploaded receipt"
           />
+          <iframe
+            v-else-if="isPdf(currentReceipt)"
+            :src="fileUrl(currentReceipt)"
+            title="Uploaded PDF receipt"
+          />
           <div v-else class="pdf-placeholder">
             <h2>Preview unavailable</h2>
-            <p>PDF rendering is not implemented yet. The file is stored and attached to this receipt.</p>
+            <p>This file type cannot be previewed in the browser.</p>
             <a :href="fileUrl(currentReceipt)" target="_blank" rel="noreferrer">Open file</a>
           </div>
         </div>
@@ -250,6 +261,10 @@ function isImage(receipt) {
   return receipt?.mime_type?.startsWith('image/')
 }
 
+function isPdf(receipt) {
+  return receipt?.mime_type === 'application/pdf'
+}
+
 async function approve() {
   await saveReceipt('approved')
 }
@@ -299,21 +314,30 @@ function onKeydown(event) {
 
 <style scoped>
 .review-page {
-  padding: 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  padding: 0 24px;
 }
 .review-header {
   display: flex;
   justify-content: space-between;
   gap: 20px;
   align-items: center;
-  margin: 0 auto 20px;
+  margin: 0 auto 10px;
   max-width: 1440px;
+  width: 100%;
+}
+.review-header h1 {
+  font-size: 1.55em;
 }
 .eyebrow {
   color: var(--accent-hover);
   font-size: 0.78em;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   text-transform: uppercase;
 }
 .header-actions {
@@ -324,11 +348,12 @@ function onKeydown(event) {
 }
 .review-shell {
   display: grid;
-  grid-template-columns: 260px minmax(360px, 1fr) minmax(360px, 520px);
+  grid-template-columns: 220px minmax(420px, 1fr) minmax(340px, 460px);
   gap: 16px;
   max-width: 1440px;
   margin: 0 auto;
-  min-height: 680px;
+  min-height: 0;
+  width: 100%;
 }
 .queue-list,
 .document-pane,
@@ -342,6 +367,8 @@ function onKeydown(event) {
   display: grid;
   align-content: start;
   gap: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 12px;
 }
 .queue-list button {
@@ -389,7 +416,13 @@ function onKeydown(event) {
   color: var(--muted);
 }
 .document-pane {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+  overscroll-behavior: contain;
+}
+.document-pane.has-toolbar {
+  grid-template-rows: auto minmax(0, 1fr);
 }
 .document-toolbar {
   border-bottom: 1px solid var(--border);
@@ -409,15 +442,22 @@ button {
 }
 .document-view {
   display: grid;
-  min-height: 620px;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   place-items: center;
-  padding: 24px;
+  padding: 12px;
 }
 .document-view img {
   max-width: 100%;
   transform-origin: center;
   transition: transform 0.12s ease;
+}
+.document-view iframe {
+  border: 0;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
 }
 .pdf-placeholder {
   max-width: 420px;
@@ -434,6 +474,8 @@ button {
   display: grid;
   gap: 14px;
   align-content: start;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 18px;
 }
 .form-head {
@@ -501,14 +543,70 @@ textarea {
   max-width: 720px;
   padding: 28px;
 }
+.caught-up {
+  align-self: start;
+  margin-top: 72px;
+  max-width: 520px;
+  text-align: center;
+}
+.caught-up-icon {
+  align-items: center;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(134, 239, 172, 0.28);
+  border-radius: 999px;
+  color: #86efac;
+  display: inline-flex;
+  font-size: 1.25em;
+  font-weight: 700;
+  height: 42px;
+  justify-content: center;
+  margin-bottom: 14px;
+  width: 42px;
+}
+.caught-up h2 {
+  color: var(--text);
+  font-size: 1.35em;
+  margin-bottom: 8px;
+}
+.caught-up p {
+  margin: 0 auto 18px;
+  max-width: 420px;
+}
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.empty-actions a {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  padding: 9px 13px;
+}
+.empty-actions .secondary-link {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
 .error {
   color: #fca5a5;
   margin: 0 auto 16px;
   max-width: 1440px;
 }
 @media (max-width: 1100px) {
+  .review-page {
+    height: auto;
+    margin-top: 0;
+    overflow: visible;
+  }
   .review-shell {
     grid-template-columns: 1fr;
+  }
+  .document-view iframe {
+    height: 70vh;
   }
   .queue-list {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

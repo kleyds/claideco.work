@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Client, User
+from app.models import BankTransaction, Client, Receipt, Reconciliation, User
 from app.schemas import (
     ClientCreateRequest,
+    ClientMetrics,
+    ClientMetricsResponse,
     ClientPublic,
     ClientsResponse,
     ClientUpdateRequest,
@@ -19,14 +24,14 @@ router = APIRouter(prefix="/clients", tags=["clients"])
 SOFTWARE_OPTIONS = {"quickbooks", "xero", "juantax", "excel", "other"}
 
 
-def _clean(value: str | None) -> str | None:
+def _clean(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
     value = value.strip()
     return value or None
 
 
-def _normalize_software(value: str | None) -> str:
+def _normalize_software(value: Optional[str]) -> str:
     software = (value or "other").strip().lower()
     if software not in SOFTWARE_OPTIONS:
         raise HTTPException(422, f"software must be one of: {sorted(SOFTWARE_OPTIONS)}")
@@ -77,6 +82,55 @@ def create_client(
     db.commit()
     db.refresh(client)
     return client
+
+
+@router.get("/metrics", response_model=ClientMetricsResponse)
+def client_metrics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    clients = db.scalars(
+        select(Client.id).where(Client.user_id == current_user.id, Client.deleted_at.is_(None))
+    ).all()
+    metrics = []
+    for client_id in clients:
+        unprocessed_invoices = db.scalar(
+            select(func.count())
+            .select_from(Receipt)
+            .where(
+                Receipt.client_id == client_id,
+                Receipt.user_id == current_user.id,
+                Receipt.status.in_(["pending", "processing", "done", "error"]),
+            )
+        )
+        unreconciled_bank_entries = db.scalar(
+            select(func.count())
+            .select_from(BankTransaction)
+            .where(
+                BankTransaction.client_id == client_id,
+                BankTransaction.user_id == current_user.id,
+                BankTransaction.status == "unreconciled",
+            )
+        )
+        missing_2307s = db.scalar(
+            select(func.count())
+            .select_from(Reconciliation)
+            .where(
+                Reconciliation.client_id == client_id,
+                Reconciliation.user_id == current_user.id,
+                Reconciliation.requires_2307 == "true",
+                Reconciliation.form_2307_status != "attached",
+            )
+        )
+        metrics.append(
+            ClientMetrics(
+                client_id=client_id,
+                unprocessed_invoices=unprocessed_invoices or 0,
+                unreconciled_bank_entries=unreconciled_bank_entries or 0,
+                missing_2307s=missing_2307s or 0,
+            )
+        )
+    return ClientMetricsResponse(metrics=metrics)
 
 
 @router.get("/{client_id}", response_model=ClientPublic)

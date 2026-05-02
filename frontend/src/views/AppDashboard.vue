@@ -5,10 +5,6 @@
         <p class="eyebrow">Workspace</p>
         <h1>Clients</h1>
       </div>
-      <div class="actions">
-        <router-link to="/app/clients/new" class="primary">New client</router-link>
-        <button type="button" @click="logout">Log out</button>
-      </div>
     </header>
 
     <section class="summary">
@@ -64,15 +60,15 @@
           </div>
           <div>
             <dt>Unprocessed invoices</dt>
-            <dd>0</dd>
+            <dd>{{ clientMetrics(client.id).unprocessed_invoices }}</dd>
           </div>
           <div>
             <dt>Unreconciled bank entries</dt>
-            <dd>0</dd>
+            <dd>{{ clientMetrics(client.id).unreconciled_bank_entries }}</dd>
           </div>
           <div>
             <dt>Missing 2307s</dt>
-            <dd>0</dd>
+            <dd>{{ clientMetrics(client.id).missing_2307s }}</dd>
           </div>
         </dl>
       </router-link>
@@ -88,21 +84,30 @@ import { apiFetch, clearToken } from '../api'
 const router = useRouter()
 const user = ref(null)
 const clients = ref([])
+const metricsByClient = ref({})
 const loading = ref(true)
 const error = ref('')
 
-const openWorkCount = computed(() => 0)
+const openWorkCount = computed(() =>
+  Object.values(metricsByClient.value).reduce(
+    (total, metrics) =>
+      total + metrics.unprocessed_invoices + metrics.unreconciled_bank_entries + metrics.missing_2307s,
+    0
+  )
+)
 
 onMounted(loadDashboard)
 
 async function loadDashboard() {
   try {
-    const [me, clientData] = await Promise.all([
+    const [me, clientData, metricsData] = await Promise.all([
       apiFetch('/auth/me'),
       apiFetch('/clients'),
+      apiFetch('/clients/metrics'),
     ])
     user.value = me.user
     clients.value = clientData.clients
+    metricsByClient.value = Object.fromEntries(metricsData.metrics.map((metrics) => [metrics.client_id, metrics]))
   } catch (err) {
     if (err.message.includes('credentials')) {
       clearToken()
@@ -113,11 +118,6 @@ async function loadDashboard() {
   } finally {
     loading.value = false
   }
-}
-
-function logout() {
-  clearToken()
-  router.push('/login')
 }
 
 function softwareLabel(value) {
@@ -131,27 +131,37 @@ function softwareLabel(value) {
   return labels[value] || 'Other'
 }
 
-function deadlineStatus() {
-  return 'green'
+function clientMetrics(clientId) {
+  return metricsByClient.value[clientId] || {
+    unprocessed_invoices: 0,
+    unreconciled_bank_entries: 0,
+    missing_2307s: 0,
+  }
 }
 
-function deadlineLabel() {
-  return 'On track'
+function clientOpenWork(client) {
+  const metrics = clientMetrics(client.id)
+  return metrics.unprocessed_invoices + metrics.unreconciled_bank_entries + metrics.missing_2307s
+}
+
+function deadlineStatus(client) {
+  const openWork = clientOpenWork(client)
+  if (openWork === 0) return 'green'
+  if (openWork <= 5) return 'yellow'
+  return 'red'
+}
+
+function deadlineLabel(client) {
+  const openWork = clientOpenWork(client)
+  return openWork === 0 ? 'On track' : `${openWork} open`
 }
 </script>
 
 <style scoped>
 .app-page {
-  padding: 32px 24px 64px;
-}
-header,
-.actions {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+  padding: 16px 24px 64px;
 }
 header {
-  justify-content: space-between;
   margin-bottom: 28px;
 }
 .eyebrow {
@@ -160,22 +170,6 @@ header {
   font-weight: 700;
   margin-bottom: 4px;
   text-transform: uppercase;
-}
-button,
-.primary {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-  font: inherit;
-  padding: 10px 14px;
-}
-.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-  font-weight: 600;
 }
 .summary,
 .client-grid {
@@ -217,8 +211,12 @@ button,
   color: var(--text);
 }
 .client-card:hover {
+  background: var(--surface-2);
   border-color: var(--accent);
   color: var(--text);
+}
+.client-card:active {
+  transform: translateY(1px) scale(0.996);
 }
 .card-top {
   display: flex;
@@ -239,6 +237,14 @@ button,
 .status.green {
   background: rgba(34, 197, 94, 0.14);
   color: #86efac;
+}
+.status.yellow {
+  background: rgba(234, 179, 8, 0.14);
+  color: #fde68a;
+}
+.status.red {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
 }
 dl {
   display: grid;

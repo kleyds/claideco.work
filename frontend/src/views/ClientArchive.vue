@@ -105,10 +105,11 @@
             <th>VAT</th>
             <th>Total</th>
             <th>Confidence</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="receipt in receipts" :key="receipt.id">
+          <tr v-for="receipt in receipts" :key="receipt.id" :class="{ selected: selectedReceipt?.id === receipt.id }">
             <td>{{ receipt.data?.date || '-' }}</td>
             <td>
               <strong>{{ receipt.data?.vendor || receipt.original_name || `Receipt #${receipt.id}` }}</strong>
@@ -124,9 +125,120 @@
                 {{ formatConfidence(receipt.data?.confidence) }}
               </span>
             </td>
+            <td>
+              <button type="button" class="secondary compact" @click="openReceipt(receipt)">View</button>
+            </td>
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section v-if="selectedReceipt" class="detail-panel">
+      <div class="detail-head">
+        <div>
+          <p class="eyebrow">Read-only detail</p>
+          <h2>{{ selectedReceipt.data?.vendor || selectedReceipt.original_name || `Receipt #${selectedReceipt.id}` }}</h2>
+          <p>{{ selectedReceipt.original_name }} - {{ selectedReceipt.status }}</p>
+        </div>
+        <button type="button" class="secondary" @click="selectedReceipt = null">Close</button>
+      </div>
+
+      <div class="detail-grid">
+        <aside class="document-preview">
+          <img v-if="isImage(selectedReceipt)" :src="fileUrl(selectedReceipt)" alt="Archived receipt" />
+          <iframe
+            v-else-if="isPdf(selectedReceipt)"
+            :src="fileUrl(selectedReceipt)"
+            title="Archived PDF receipt"
+          />
+          <div v-else class="pdf-placeholder">
+            <h3>Preview unavailable</h3>
+            <p>This file type cannot be previewed in the browser.</p>
+          </div>
+          <a :href="fileUrl(selectedReceipt)" target="_blank" rel="noreferrer">Open original file</a>
+        </aside>
+
+        <div class="detail-content">
+          <dl class="field-grid">
+            <div>
+              <dt>Date</dt>
+              <dd>{{ selectedReceipt.data?.date || '-' }}</dd>
+            </div>
+            <div>
+              <dt>Vendor TIN</dt>
+              <dd>{{ selectedReceipt.data?.vendor_tin || '-' }}</dd>
+            </div>
+            <div>
+              <dt>OR number</dt>
+              <dd>{{ selectedReceipt.data?.or_number || '-' }}</dd>
+            </div>
+            <div>
+              <dt>SI number</dt>
+              <dd>{{ selectedReceipt.data?.si_number || '-' }}</dd>
+            </div>
+            <div>
+              <dt>Document type</dt>
+              <dd>{{ label(selectedReceipt.data?.doc_type) }}</dd>
+            </div>
+            <div>
+              <dt>VAT type</dt>
+              <dd>{{ label(selectedReceipt.data?.vat_type) }}</dd>
+            </div>
+            <div>
+              <dt>Vatable amount</dt>
+              <dd>{{ formatAmount(selectedReceipt.data?.vatable_amount, selectedReceipt.data?.currency) }}</dd>
+            </div>
+            <div>
+              <dt>VAT amount</dt>
+              <dd>{{ formatAmount(selectedReceipt.data?.vat_amount, selectedReceipt.data?.currency) }}</dd>
+            </div>
+            <div>
+              <dt>Subtotal</dt>
+              <dd>{{ formatAmount(selectedReceipt.data?.subtotal, selectedReceipt.data?.currency) }}</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd>{{ formatAmount(selectedReceipt.data?.total, selectedReceipt.data?.currency) }}</dd>
+            </div>
+            <div>
+              <dt>Confidence</dt>
+              <dd>{{ formatConfidence(selectedReceipt.data?.confidence) }}</dd>
+            </div>
+            <div>
+              <dt>Processed</dt>
+              <dd>{{ formatDateTime(selectedReceipt.processed_at) }}</dd>
+            </div>
+          </dl>
+
+          <section class="line-items">
+            <h3>Line items</h3>
+            <div v-if="selectedReceipt.line_items.length === 0" class="empty">No line items captured.</div>
+            <table v-else>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Unit</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in selectedReceipt.line_items" :key="item.id">
+                  <td>{{ item.description }}</td>
+                  <td>{{ item.quantity ?? '-' }}</td>
+                  <td>{{ formatAmount(item.unit_price, selectedReceipt.data?.currency) }}</td>
+                  <td>{{ formatAmount(item.total, selectedReceipt.data?.currency) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="raw-text">
+            <h3>Raw OCR text</h3>
+            <textarea :value="selectedReceipt.raw_text || 'No OCR text captured.'" readonly rows="8" />
+          </section>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -141,6 +253,7 @@ const router = useRouter()
 const clientId = route.params.id
 const client = ref(null)
 const receipts = ref([])
+const selectedReceipt = ref(null)
 const loading = ref(true)
 const error = ref('')
 const exportFormat = ref('generic')
@@ -181,10 +294,22 @@ async function loadArchive() {
     params.set('status', 'approved')
     const data = await apiFetch(`/clients/${clientId}/receipts?${params.toString()}`)
     receipts.value = data.receipts
+    if (selectedReceipt.value && !receipts.value.some((receipt) => receipt.id === selectedReceipt.value.id)) {
+      selectedReceipt.value = null
+    }
   } catch (err) {
     handleError(err)
   } finally {
     loading.value = false
+  }
+}
+
+async function openReceipt(receipt) {
+  error.value = ''
+  try {
+    selectedReceipt.value = await apiFetch(`/receipts/${receipt.id}`)
+  } catch (err) {
+    handleError(err)
   }
 }
 
@@ -242,6 +367,19 @@ function handleError(err) {
   error.value = err.message
 }
 
+function fileUrl(receipt) {
+  if (!receipt) return ''
+  return `${API_BASE_URL}/receipts/${receipt.id}/file?token=${encodeURIComponent(getToken() || '')}`
+}
+
+function isImage(receipt) {
+  return receipt?.mime_type?.startsWith('image/')
+}
+
+function isPdf(receipt) {
+  return receipt?.mime_type === 'application/pdf'
+}
+
 function label(value) {
   if (!value) return '-'
   return value.replaceAll('_', ' ')
@@ -260,6 +398,14 @@ function formatConfidence(value) {
   return `${Math.round(value * 100)}%`
 }
 
+function formatDateTime(value) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('en-PH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
 function confidenceClass(value) {
   if (value === null || value === undefined) return 'unknown'
   if (value < 0.75) return 'low'
@@ -270,7 +416,7 @@ function confidenceClass(value) {
 
 <style scoped>
 .archive-page {
-  padding: 32px 24px 64px;
+  padding: 16px 24px 64px;
 }
 header {
   align-items: center;
@@ -289,7 +435,8 @@ header {
 .filters,
 .summary,
 .export-panel,
-.archive-list {
+.archive-list,
+.detail-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -335,6 +482,9 @@ button.secondary {
   background: var(--surface-2);
   border-color: var(--border);
   color: var(--text);
+}
+button.compact {
+  padding: 7px 10px;
 }
 .summary {
   display: grid;
@@ -402,6 +552,9 @@ td span {
   display: block;
   font-size: 0.85em;
 }
+tr.selected td {
+  background: rgba(59, 130, 246, 0.08);
+}
 .confidence {
   border-radius: 999px;
   display: inline-flex;
@@ -431,12 +584,119 @@ td span {
   color: #fca5a5;
   margin-bottom: 18px;
 }
+.detail-panel {
+  margin-top: 18px;
+}
+.detail-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.detail-head h2 {
+  font-size: 1.2em;
+  margin-bottom: 4px;
+}
+.detail-head p:not(.eyebrow) {
+  color: var(--muted);
+}
+.detail-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+}
+.document-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+.document-preview img {
+  border-radius: 6px;
+  max-height: 520px;
+  object-fit: contain;
+  width: 100%;
+}
+.document-preview iframe {
+  border: 0;
+  border-radius: 6px;
+  height: 520px;
+  width: 100%;
+}
+.document-preview a {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+.pdf-placeholder {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 24px;
+}
+.pdf-placeholder h3 {
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.detail-content {
+  display: grid;
+  gap: 18px;
+}
+.field-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.field-grid div {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+dt {
+  color: var(--muted);
+  font-size: 0.76em;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+dd {
+  color: var(--text);
+}
+.line-items,
+.raw-text {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.line-items h3,
+.raw-text h3 {
+  font-size: 1em;
+  margin-bottom: 10px;
+}
+.raw-text textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
+}
 @media (max-width: 760px) {
   header,
   .section-head,
-  .export-panel {
+  .export-panel,
+  .detail-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
   }
   .export-actions {
     width: 100%;

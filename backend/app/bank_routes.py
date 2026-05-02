@@ -1,13 +1,20 @@
+from __future__ import annotations
+
 import csv
 import io
+import os
+import uuid
 from datetime import date, datetime
 from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Optional, Tuple
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_from_token
 from app.client_routes import _client_or_404
 from app.database import get_db
 from app.models import BankTransaction, Receipt, ReceiptDataRecord, Reconciliation, User
@@ -16,13 +23,17 @@ from app.schemas import (
     BankTransactionsResponse,
     BulkCategorizeRequest,
     BulkCategorizeResponse,
+    Form2307UpdateRequest,
     MatchSuggestion,
     MatchSuggestionsResponse,
     ReconcileRequest,
     ReconciliationPublic,
+    ReconciliationsResponse,
 )
 
 router = APIRouter(prefix="/clients/{client_id}/bank", tags=["bank"])
+
+FORM_2307_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
 
 
 def _first(row: dict[str, str], keys: list[str]) -> str:
@@ -43,7 +54,7 @@ def _parse_amount(value: str) -> float:
     return float(cleaned)
 
 
-def _parse_date(value: str) -> str | None:
+def _parse_date(value: str) -> Optional[str]:
     value = value.strip()
     if not value:
         return None
@@ -55,7 +66,47 @@ def _parse_date(value: str) -> str | None:
     return value
 
 
-def _transaction_from_row(client_id: int, user_id: int, row: dict[str, str], bank_name: str | None) -> BankTransaction:
+def _upload_root() -> Path:
+    return Path(os.getenv("UPLOAD_DIR", "./uploads")).resolve()
+
+
+def _extension(filename: Optional[str], content_type: Optional[str]) -> str:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".webp", ".pdf"}:
+        return suffix
+    return {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "application/pdf": ".pdf",
+    }.get(content_type or "", "")
+
+
+def _reconciliation_statement(client_id: int, user_id: int):
+    return (
+        select(Reconciliation)
+        .options(
+            selectinload(Reconciliation.receipt).selectinload(Receipt.data),
+            selectinload(Reconciliation.receipt).selectinload(Receipt.line_items),
+            selectinload(Reconciliation.bank_transaction),
+        )
+        .where(
+            Reconciliation.client_id == client_id,
+            Reconciliation.user_id == user_id,
+        )
+    )
+
+
+def _reconciliation_or_404(reconciliation_id: int, client_id: int, user_id: int, db: Session) -> Reconciliation:
+    reconciliation = db.scalar(
+        _reconciliation_statement(client_id, user_id).where(Reconciliation.id == reconciliation_id)
+    )
+    if not reconciliation:
+        raise HTTPException(404, "Reconciliation not found")
+    return reconciliation
+
+
+def _transaction_from_row(client_id: int, user_id: int, row: dict[str, str], bank_name: Optional[str]) -> BankTransaction:
     debit = _parse_amount(_first(row, ["debit", "withdrawal", "withdrawals", "debit amount"]))
     credit = _parse_amount(_first(row, ["credit", "deposit", "deposits", "credit amount"]))
     raw_amount = _first(row, ["amount", "transaction amount", "amt"])
@@ -79,7 +130,7 @@ def _transaction_from_row(client_id: int, user_id: int, row: dict[str, str], ban
 async def import_bank_csv(
     client_id: int,
     file: UploadFile = File(...),
-    bank_name: str | None = None,
+    bank_name: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -108,7 +159,7 @@ async def import_bank_csv(
 @router.get("/transactions", response_model=BankTransactionsResponse)
 def list_bank_transactions(
     client_id: int,
-    status: str | None = None,
+    status: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -123,7 +174,101 @@ def list_bank_transactions(
     return BankTransactionsResponse(transactions=transactions)
 
 
-def _date_distance_days(left: str | None, right: str | None) -> int | None:
+@router.get("/reconciliations", response_model=ReconciliationsResponse)
+def list_reconciliations(
+    client_id: int,
+    requires_2307: Optional[bool] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _client_or_404(client_id, current_user.id, db)
+    statement = _reconciliation_statement(client_id, current_user.id)
+    if requires_2307 is not None:
+        statement = statement.where(Reconciliation.requires_2307 == ("true" if requires_2307 else "false"))
+    reconciliations = db.scalars(statement.order_by(Reconciliation.created_at.desc())).all()
+    return ReconciliationsResponse(reconciliations=reconciliations)
+
+
+@router.patch("/reconciliations/{reconciliation_id}/2307", response_model=ReconciliationPublic)
+def update_form_2307_status(
+    client_id: int,
+    reconciliation_id: int,
+    payload: Form2307UpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _client_or_404(client_id, current_user.id, db)
+    reconciliation = _reconciliation_or_404(reconciliation_id, client_id, current_user.id, db)
+    if reconciliation.requires_2307 != "true":
+        raise HTTPException(422, "This reconciliation does not require Form 2307")
+
+    reconciliation.form_2307_status = payload.status
+    db.commit()
+    db.refresh(reconciliation)
+    return reconciliation
+
+
+@router.post("/reconciliations/{reconciliation_id}/2307/file", response_model=ReconciliationPublic)
+async def upload_form_2307_file(
+    client_id: int,
+    reconciliation_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _client_or_404(client_id, current_user.id, db)
+    reconciliation = _reconciliation_or_404(reconciliation_id, client_id, current_user.id, db)
+    if reconciliation.requires_2307 != "true":
+        raise HTTPException(422, "This reconciliation does not require Form 2307")
+    if file.content_type not in FORM_2307_TYPES:
+        raise HTTPException(400, "Upload a PDF, JPEG, PNG, or WebP Form 2307 file")
+
+    content = await file.read()
+    max_mb = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+    if len(content) > max_mb * 1024 * 1024:
+        raise HTTPException(413, f"{file.filename or 'File'} is too large (max {max_mb} MB)")
+
+    target_dir = _upload_root() / str(current_user.id) / str(client_id) / "form_2307"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{reconciliation.id}-{uuid.uuid4().hex}{_extension(file.filename, file.content_type)}"
+    file_path = target_dir / stored_name
+    file_path.write_bytes(content)
+
+    reconciliation.form_2307_file_path = str(file_path)
+    reconciliation.form_2307_original_name = file.filename
+    reconciliation.form_2307_mime_type = file.content_type
+    reconciliation.form_2307_uploaded_at = datetime.utcnow()
+    reconciliation.form_2307_status = "attached"
+    db.commit()
+    db.refresh(reconciliation)
+    return reconciliation
+
+
+@router.get("/reconciliations/{reconciliation_id}/2307/file")
+def get_form_2307_file(
+    client_id: int,
+    reconciliation_id: int,
+    token: str,
+    db: Session = Depends(get_db),
+):
+    current_user = user_from_token(token, db)
+    _client_or_404(client_id, current_user.id, db)
+    reconciliation = _reconciliation_or_404(reconciliation_id, client_id, current_user.id, db)
+    if not reconciliation.form_2307_file_path:
+        raise HTTPException(404, "Form 2307 file not found")
+
+    path = Path(reconciliation.form_2307_file_path)
+    if not path.exists():
+        raise HTTPException(404, "Form 2307 file not found")
+    return FileResponse(
+        path,
+        media_type=reconciliation.form_2307_mime_type,
+        filename=reconciliation.form_2307_original_name,
+        content_disposition_type="inline",
+    )
+
+
+def _date_distance_days(left: Optional[str], right: Optional[str]) -> Optional[int]:
     if not left or not right:
         return None
     try:
@@ -138,7 +283,7 @@ def _name_score(left: str, right: str) -> float:
     return SequenceMatcher(None, left.lower(), right.lower()).ratio()
 
 
-def _score_match(transaction: BankTransaction, receipt: Receipt) -> tuple[float, list[str], float | None, bool]:
+def _score_match(transaction: BankTransaction, receipt: Receipt) -> Tuple[float, list[str], Optional[float], bool]:
     if not receipt.data:
         return 0.0, [], None, False
 
@@ -173,6 +318,19 @@ def _score_match(transaction: BankTransaction, receipt: Receipt) -> tuple[float,
     return round(score, 3), reasons, withholding_variance, requires_2307
 
 
+def _approved_receipts_statement(client_id: int, user_id: int):
+    return (
+        select(Receipt)
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items))
+        .join(ReceiptDataRecord, ReceiptDataRecord.receipt_id == Receipt.id)
+        .where(
+            Receipt.client_id == client_id,
+            Receipt.user_id == user_id,
+            Receipt.status == "approved",
+        )
+    )
+
+
 @router.get("/transactions/{transaction_id}/matches", response_model=MatchSuggestionsResponse)
 def match_suggestions(
     client_id: int,
@@ -191,16 +349,7 @@ def match_suggestions(
     if not transaction:
         raise HTTPException(404, "Bank transaction not found")
 
-    receipts = db.scalars(
-        select(Receipt)
-        .options(selectinload(Receipt.data), selectinload(Receipt.line_items))
-        .join(ReceiptDataRecord, ReceiptDataRecord.receipt_id == Receipt.id)
-        .where(
-            Receipt.client_id == client_id,
-            Receipt.user_id == current_user.id,
-            Receipt.status == "approved",
-        )
-    ).all()
+    receipts = db.scalars(_approved_receipts_statement(client_id, current_user.id)).all()
 
     suggestions = []
     for receipt in receipts:
@@ -218,6 +367,61 @@ def match_suggestions(
 
     suggestions.sort(key=lambda item: item.score, reverse=True)
     return MatchSuggestionsResponse(transaction=transaction, suggestions=suggestions[:5])
+
+
+@router.get("/transactions/{transaction_id}/manual-matches", response_model=MatchSuggestionsResponse)
+def manual_match_search(
+    client_id: int,
+    transaction_id: int,
+    q: str = Query("", max_length=100),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _client_or_404(client_id, current_user.id, db)
+    transaction = db.scalar(
+        select(BankTransaction).where(
+            BankTransaction.id == transaction_id,
+            BankTransaction.client_id == client_id,
+            BankTransaction.user_id == current_user.id,
+        )
+    )
+    if not transaction:
+        raise HTTPException(404, "Bank transaction not found")
+
+    statement = _approved_receipts_statement(client_id, current_user.id)
+    query = q.strip()
+    if query:
+        like_query = f"%{query}%"
+        statement = statement.where(
+            ReceiptDataRecord.vendor.ilike(like_query)
+            | ReceiptDataRecord.or_number.ilike(like_query)
+            | ReceiptDataRecord.si_number.ilike(like_query)
+            | Receipt.original_name.ilike(like_query)
+        )
+
+    matched_receipt_ids = select(Reconciliation.receipt_id).where(
+        Reconciliation.client_id == client_id,
+        Reconciliation.user_id == current_user.id,
+    )
+    receipts = db.scalars(statement.where(Receipt.id.not_in(matched_receipt_ids)).limit(20)).all()
+
+    suggestions = []
+    for receipt in receipts:
+        score, reasons, withholding_variance, requires_2307 = _score_match(transaction, receipt)
+        if not reasons:
+            reasons = ["manual search"]
+        suggestions.append(
+            MatchSuggestion(
+                receipt=receipt,
+                score=score,
+                reasons=reasons,
+                withholding_variance=withholding_variance,
+                requires_2307=requires_2307,
+            )
+        )
+
+    suggestions.sort(key=lambda item: item.score, reverse=True)
+    return MatchSuggestionsResponse(transaction=transaction, suggestions=suggestions)
 
 
 @router.post("/transactions/{transaction_id}/reconcile", response_model=ReconciliationPublic, status_code=201)
@@ -238,6 +442,8 @@ def reconcile_transaction(
     )
     if not transaction:
         raise HTTPException(404, "Bank transaction not found")
+    if transaction.status == "reconciled":
+        raise HTTPException(409, "Bank transaction is already reconciled")
 
     receipt = db.scalar(
         select(Receipt).where(
@@ -253,7 +459,6 @@ def reconcile_transaction(
     existing = db.scalar(
         select(Reconciliation).where(
             Reconciliation.bank_transaction_id == transaction.id,
-            Reconciliation.receipt_id == receipt.id,
         )
     )
     if existing:
@@ -267,12 +472,30 @@ def reconcile_transaction(
         status="matched",
         match_score=payload.match_score,
         requires_2307="true" if payload.requires_2307 else "false",
+        form_2307_status="missing",
     )
     transaction.status = "reconciled"
     db.add(reconciliation)
     db.commit()
     db.refresh(reconciliation)
     return reconciliation
+
+
+@router.delete("/reconciliations/{reconciliation_id}", status_code=204)
+def delete_reconciliation(
+    client_id: int,
+    reconciliation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _client_or_404(client_id, current_user.id, db)
+    reconciliation = _reconciliation_or_404(reconciliation_id, client_id, current_user.id, db)
+    transaction = reconciliation.bank_transaction
+    if transaction:
+        transaction.status = "unreconciled"
+    db.delete(reconciliation)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/transactions/category", response_model=BulkCategorizeResponse)
