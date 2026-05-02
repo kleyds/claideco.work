@@ -9,6 +9,8 @@
         <router-link to="/products">Products</router-link>
         <router-link to="/docs">Docs</router-link>
         <router-link to="/about">About</router-link>
+        <router-link to="/login">Log in</router-link>
+        <router-link to="/signup" class="signup-link">Sign up</router-link>
       </div>
     </div>
   </nav>
@@ -59,5 +61,20 @@ nav {
 .links a:hover,
 .links a.router-link-active {
   color: var(--text);
+}
+.signup-link {
+  color: var(--text) !important;
+}
+
+@media (max-width: 720px) {
+  .nav-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .links {
+    flex-wrap: wrap;
+    gap: 14px 18px;
+  }
 }
 </style>

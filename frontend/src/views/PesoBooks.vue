@@ -2,11 +2,11 @@
   <div>
     <section class="hero">
       <div class="container">
-        <span class="badge">Now in private beta &middot; Philippines</span>
+        <span class="badge">Pre-MVP &middot; Built for Philippine firms</span>
         <h1>Stop typing resibos.</h1>
         <p class="lead">
-          PesoBooks turns receipts, invoices, and GCash statements into clean accounting
-          entries &mdash; for Filipino bookkeepers who are tired of doing it by hand.
+          PesoBooks turns receipts, invoices, wallet screenshots, and bank documents into
+          clean accounting entries for Filipino bookkeepers who are tired of typing by hand.
         </p>
         <div class="cta">
           <a href="#waitlist" class="btn">Join the waitlist</a>
@@ -44,28 +44,28 @@
           <span class="step-num">1</span>
           <div>
             <h3>Receipts come in</h3>
-            <p>Your client snaps a photo on their phone, forwards an email, or uploads a PDF. Or you drop 50 at once.</p>
+            <p>Select a client, then upload receipt photos in batches of up to 50 files.</p>
           </div>
         </li>
         <li>
           <span class="step-num">2</span>
           <div>
             <h3>PesoBooks reads them</h3>
-            <p>Vendor name, TIN, OR/SI number, date, VAT-able amount, VAT, total &mdash; extracted and sanity-checked.</p>
+            <p>Vendor name, TIN, OR/SI number, date, VAT type, vatable amount, VAT, total, and document type are extracted for review.</p>
           </div>
         </li>
         <li>
           <span class="step-num">3</span>
           <div>
             <h3>You review and approve</h3>
-            <p>Side-by-side photo and fields. Fix anything wrong in seconds. Audit trail kept for BIR.</p>
+            <p>Side-by-side original document and editable fields. Fix low-confidence values before they reach your books.</p>
           </div>
         </li>
         <li>
           <span class="step-num">4</span>
           <div>
-            <h3>One click to your software</h3>
-            <p>Push to QuickBooks Online, Xero, JuanTax, or export a clean CSV. No copy-paste.</p>
+            <h3>Export clean CSVs</h3>
+            <p>Export approved receipts in QuickBooks Online, Xero, or generic CSV formats. Your accounting software stays the system of record.</p>
           </div>
         </li>
       </ol>
@@ -90,14 +90,14 @@
           <div class="no">Not parsed</div>
         </div>
         <div class="compare-row">
-          <div>GCash, Maya, BPI, BDO statements</div>
-          <div class="yes">Out of the box</div>
+          <div>GCash, Maya, BPI, BDO documents</div>
+          <div class="yes">PH document types</div>
           <div class="no">Manual mapping</div>
         </div>
         <div class="compare-row">
-          <div>Tagalog &amp; Bisaya OCR</div>
-          <div class="yes">Yes</div>
-          <div class="no">English-only models</div>
+          <div>Review workflow for noisy OCR</div>
+          <div class="yes">Human-in-the-loop</div>
+          <div class="no">Opaque automation</div>
         </div>
         <div class="compare-row">
           <div>Pricing in pesos</div>
@@ -120,24 +120,100 @@
           <p>Manage all your clients in one workspace. Switch between books in two clicks.</p>
         </div>
         <div class="feature">
-          <h3>Client portal &mdash; free for them</h3>
-          <p>Your SMB clients get a simple page to upload receipts. They never see the accounting layer.</p>
+          <h3>Client-scoped records</h3>
+          <p>Receipts, documents, review queues, and exports stay attached to the right business.</p>
         </div>
         <div class="feature">
           <h3>Bulk processing</h3>
-          <p>Drop 200 receipts at once. Walk away. Come back to a review queue.</p>
+          <p>Upload up to 50 files at once and let extraction run in the background.</p>
         </div>
         <div class="feature">
-          <h3>Audit-friendly</h3>
-          <p>Original image, extracted data, edits, and approver are all logged. BIR-ready.</p>
+          <h3>PH-tuned extraction</h3>
+          <p>First-class fields for vendor TIN, OR/SI numbers, VAT type, vatable amount, and VAT amount.</p>
         </div>
         <div class="feature">
-          <h3>Direct exports</h3>
-          <p>QuickBooks Online, Xero, JuanTax, or CSV. We meet your stack, not the other way around.</p>
+          <h3>Review queue</h3>
+          <p>Approve or reject extracted receipts from a focused two-panel workspace.</p>
         </div>
         <div class="feature">
           <h3>API access</h3>
           <p>Power-user firms can hit our HTTP API directly. <router-link to="/docs">See the docs</router-link>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container scope">
+      <h2>MVP scope</h2>
+      <div class="scope-grid">
+        <div>
+          <span>01</span>
+          <h3>Bookkeeper auth</h3>
+          <p>Email/password accounts with JWT sessions.</p>
+        </div>
+        <div>
+          <span>02</span>
+          <h3>Multi-client workspace</h3>
+          <p>One firm account, many client businesses.</p>
+        </div>
+        <div>
+          <span>03</span>
+          <h3>Batch receipt upload</h3>
+          <p>Client-scoped uploads with extraction queued behind the scenes.</p>
+        </div>
+        <div>
+          <span>04</span>
+          <h3>PH receipt extraction</h3>
+          <p>BIR and VAT fields, document type detection, and confidence scoring.</p>
+        </div>
+        <div>
+          <span>05</span>
+          <h3>Review queue</h3>
+          <p>Editable fields beside the original image.</p>
+        </div>
+        <div>
+          <span>06</span>
+          <h3>CSV export</h3>
+          <p>QuickBooks Online, Xero, and generic formats.</p>
+        </div>
+        <div>
+          <span>07</span>
+          <h3>Receipt archive</h3>
+          <p>Search and filter approved receipts per client.</p>
+        </div>
+        <div>
+          <span>08</span>
+          <h3>Billing</h3>
+          <p>Paymongo subscriptions with plan-based receipt limits.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="container pricing">
+      <h2>Pricing to validate</h2>
+      <div class="pricing-table">
+        <div class="pricing-row head">
+          <div>Tier</div>
+          <div>Price</div>
+          <div>Receipts/mo</div>
+          <div>Users</div>
+        </div>
+        <div class="pricing-row">
+          <div>Solo</div>
+          <div>PHP 1,500</div>
+          <div>500</div>
+          <div>1</div>
+        </div>
+        <div class="pricing-row">
+          <div>Firm</div>
+          <div>PHP 5,000</div>
+          <div>2,000</div>
+          <div>5</div>
+        </div>
+        <div class="pricing-row">
+          <div>Agency</div>
+          <div>PHP 12,000</div>
+          <div>10,000</div>
+          <div>Unlimited</div>
         </div>
       </div>
     </section>
@@ -357,6 +433,57 @@ section h2 {
   font-size: 0.95em;
 }
 
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+.scope-grid > div {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.scope-grid span {
+  display: block;
+  color: var(--accent-hover);
+  font-size: 0.78em;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.scope-grid h3 {
+  margin-bottom: 6px;
+  font-size: 1em;
+}
+.scope-grid p {
+  color: var(--muted);
+  font-size: 0.93em;
+}
+
+.pricing-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.pricing-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr 1fr;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95em;
+}
+.pricing-row:last-child {
+  border-bottom: none;
+}
+.pricing-row.head {
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
 .waitlist-inner {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -407,11 +534,13 @@ section h2 {
 }
 
 @media (max-width: 640px) {
-  .compare-row {
+  .compare-row,
+  .pricing-row {
     grid-template-columns: 1fr;
     gap: 6px;
   }
-  .compare-row.head {
+  .compare-row.head,
+  .pricing-row.head {
     display: none;
   }
 }

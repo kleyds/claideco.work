@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -5,7 +7,20 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth_routes import router as auth_router
+from app.bank_routes import router as bank_router
+from app.client_routes import router as client_router
+from app.database import init_db
+from app.receipt_routes import router as receipt_router
 from app.routes import router
+
+
+def _cors_origins() -> list[str]:
+    raw = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174",
+    )
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 app = FastAPI(
     title="PesoBooks API",
@@ -15,13 +30,22 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=_cors_origins(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth_router, prefix="/v1")
+app.include_router(client_router, prefix="/v1")
+app.include_router(bank_router, prefix="/v1")
+app.include_router(receipt_router, prefix="/v1")
 app.include_router(router, prefix="/v1")
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 
 @app.get("/")

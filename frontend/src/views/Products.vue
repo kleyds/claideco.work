@@ -12,13 +12,13 @@
       <router-link to="/pesobooks" class="card">
         <div class="card-head">
           <div class="icon">₱</div>
-          <span class="status live">Private beta</span>
+          <span class="status live">Pre-MVP</span>
         </div>
         <h2>PesoBooks</h2>
         <p class="tagline">Bookkeeping infrastructure for Filipino accounting firms.</p>
         <p class="desc">
-          Receipts, invoices, and GCash statements turned into clean entries for
-          QuickBooks, Xero, or JuanTax. Built for bookkeepers tired of typing.
+          Receipts, invoices, wallet screenshots, and bank documents turned into
+          clean CSV-ready entries for Filipino bookkeepers tired of typing.
         </p>
         <span class="link">Learn more &rarr;</span>
       </router-link>

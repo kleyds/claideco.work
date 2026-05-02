@@ -5,14 +5,19 @@ from openai import OpenAI
 
 from app.schemas import ReceiptData
 
-SYSTEM_PROMPT = """You extract structured data from receipt and invoice OCR text.
-The OCR text may be noisy or contain errors — make best-effort guesses for fields you can identify.
+SYSTEM_PROMPT = """You extract structured data from Philippine receipt, invoice, wallet, and bank OCR text.
+The OCR text may be noisy or contain errors. Make best-effort guesses for fields you can identify.
 Use null for any field you cannot determine.
 
 Rules:
 - Dates must be ISO format YYYY-MM-DD.
-- Currency must be a 3-letter ISO 4217 code (USD, PHP, EUR, GBP, JPY, ...).
+- Currency must be a 3-letter ISO 4217 code. Default to PHP for Philippine documents.
 - Numbers must be plain numeric values, never strings, never with currency symbols.
+- Extract BIR-specific fields when visible: vendor_tin, or_number, si_number, vat_type, vatable_amount, vat_amount.
+- vat_type must be one of: vatable, zero_rated, exempt, non_vat.
+- doc_type must be one of: official_receipt, sales_invoice, gcash, maya, bank_statement, other.
+- For GCash, Maya, or bank screenshots/statements, focus on payee/vendor, date, amount, reference/OR/SI numbers if visible, doc_type, and confidence.
+- confidence is a 0.0 to 1.0 self-assessment of extraction quality.
 - line_items should reflect each purchased item if visible; empty array if not parseable.
 
 Return JSON only, matching the requested schema."""

@@ -23,7 +23,7 @@ async def extract_receipt_endpoint(
             f"Unsupported file type: {file.content_type}. Allowed: {sorted(ALLOWED_TYPES)}",
         )
 
-    max_mb = int(os.getenv("MAX_FILE_SIZE_MB", "10"))
+    max_mb = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
     content = await file.read()
     if len(content) > max_mb * 1024 * 1024:
         raise HTTPException(413, f"File too large (max {max_mb} MB)")

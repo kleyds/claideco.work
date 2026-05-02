@@ -30,13 +30,13 @@
       </p>
 
       <h2 id="extract">POST /v1/extract-receipt</h2>
-      <p>Upload a receipt or invoice image. Returns the raw OCR text plus structured fields.</p>
+      <p>Upload a receipt, invoice, GCash, Maya, or bank screenshot image. Returns the raw OCR text plus structured fields tuned for Philippine bookkeeping.</p>
 
       <h3>Request</h3>
       <p>Multipart form upload with one file field named <code>file</code>.</p>
       <ul>
         <li>Accepted types: <code>image/jpeg</code>, <code>image/png</code>, <code>image/webp</code></li>
-        <li>Max size: 10 MB (configurable)</li>
+        <li>Max size: 20 MB (configurable)</li>
         <li>Header: <code>x-api-key: your-key</code></li>
       </ul>
 
@@ -72,12 +72,20 @@ print(res.json())</code></pre>
       <pre><code>{
   "raw_text": "string  // full OCR output",
   "data": {
-    "vendor":     "string  | null",
-    "date":       "YYYY-MM-DD | null",
-    "currency":   "ISO 4217 | null",
-    "subtotal":   "number | null",
-    "tax":        "number | null",
-    "total":      "number | null",
+    "vendor":          "string | null",
+    "vendor_tin":      "string | null",
+    "or_number":       "string | null",
+    "si_number":       "string | null",
+    "date":            "YYYY-MM-DD | null",
+    "currency":        "PHP",
+    "subtotal":        "number | null",
+    "tax":             "number | null",
+    "vat_type":        "vatable | zero_rated | exempt | non_vat | null",
+    "vatable_amount":  "number | null",
+    "vat_amount":      "number | null",
+    "total":           "number | null",
+    "doc_type":        "official_receipt | sales_invoice | gcash | maya | bank_statement | other | null",
+    "confidence":      "number | null",
     "line_items": [
       {
         "description": "string",
@@ -105,7 +113,7 @@ print(res.json())</code></pre>
 
       <h2 id="limits">Limits</h2>
       <ul>
-        <li>Max file size: 10 MB.</li>
+        <li>Max file size: 20 MB.</li>
         <li>Synchronous response &mdash; typical latency 5&ndash;15 seconds per image.</li>
         <li>No rate limits in v0; polite use only.</li>
       </ul>

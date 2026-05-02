@@ -1,6 +1,9 @@
 .venv/
+.tmp/
+*.db
 __pycache__/
 *.pyc
 .env
 uploads/
+test-uploads*/
 .pytest_cache/
