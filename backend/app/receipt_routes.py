@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import fitz
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
@@ -222,11 +223,11 @@ def _persist_extracted_data(db: Session, receipt: Receipt, raw_text: str) -> Non
     payload = extracted.model_dump()
     line_items = payload.pop("line_items", [])
 
-    receipt.data = ReceiptDataRecord(
-        receipt_id=receipt.id,
-        raw_json=extracted.model_dump(),
-        **payload,
-    )
+    if receipt.data is None:
+        receipt.data = ReceiptDataRecord(receipt_id=receipt.id)
+    for key, value in payload.items():
+        setattr(receipt.data, key, value)
+    receipt.data.raw_json = extracted.model_dump()
     receipt.line_items = [
         LineItemRecord(
             receipt_id=receipt.id,
@@ -237,6 +238,14 @@ def _persist_extracted_data(db: Session, receipt: Receipt, raw_text: str) -> Non
         )
         for item in extracted.line_items
     ]
+
+
+def _persist_blank_data(receipt: Receipt, error_message: str) -> None:
+    if receipt.data is None:
+        receipt.data = ReceiptDataRecord(receipt_id=receipt.id)
+    receipt.data.confidence = None
+    receipt.data.raw_json = {"extraction_error": error_message}
+    receipt.line_items = []
 
 
 def process_receipt(receipt_id: int) -> None:
@@ -264,7 +273,12 @@ def process_receipt(receipt_id: int) -> None:
             raise ValueError("No OCR text could be extracted from this file.")
 
         receipt.raw_text = raw_text
-        _persist_extracted_data(db, receipt, raw_text)
+        try:
+            _persist_extracted_data(db, receipt, raw_text)
+            receipt.error_message = None
+        except Exception as exc:
+            _persist_blank_data(receipt, str(exc))
+            receipt.error_message = f"Structured extraction skipped: {exc}"
         receipt.status = "done"
         receipt.processed_at = datetime.utcnow()
         db.commit()
@@ -438,6 +452,17 @@ def get_receipt(
     return _receipt_or_404(receipt_id, current_user.id, db)
 
 
+@router.post("/receipts/{receipt_id}/reprocess", response_model=ReceiptPublic)
+def reprocess_receipt(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    receipt = _receipt_or_404(receipt_id, current_user.id, db)
+    process_receipt(receipt.id)
+    return _receipt_or_404(receipt.id, current_user.id, db)
+
+
 @router.get("/receipts/{receipt_id}/file")
 def get_receipt_file(
     receipt_id: int,
@@ -455,6 +480,36 @@ def get_receipt_file(
         filename=receipt.original_name,
         content_disposition_type="inline",
     )
+
+
+@router.get("/receipts/{receipt_id}/preview")
+def get_receipt_preview(
+    receipt_id: int,
+    token: str,
+    page: int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+):
+    current_user = user_from_token(token, db)
+    receipt = _receipt_or_404(receipt_id, current_user.id, db)
+    path = Path(receipt.file_path)
+    if not path.exists():
+        raise HTTPException(404, "Receipt file not found")
+
+    if receipt.mime_type in IMAGE_TYPES:
+        return FileResponse(path, media_type=receipt.mime_type)
+    if receipt.mime_type != "application/pdf":
+        raise HTTPException(415, "Preview is only available for images and PDFs")
+
+    try:
+        with fitz.open(str(path)) as document:
+            if page > len(document):
+                raise HTTPException(404, "PDF page not found")
+            pixmap = document.load_page(page - 1).get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            return Response(content=pixmap.tobytes("png"), media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Could not render PDF preview: {exc}") from exc
 
 
 @router.patch("/receipts/{receipt_id}", response_model=ReceiptPublic)

@@ -47,6 +47,9 @@ def _upgrade_reconciliations_table() -> None:
         "form_2307_original_name": "VARCHAR(255)",
         "form_2307_mime_type": "VARCHAR(100)",
         "form_2307_uploaded_at": "DATETIME",
+        "form_2307_requested_at": "DATETIME",
+        "form_2307_received_at": "DATETIME",
+        "form_2307_notes": "TEXT",
     }
 
     with engine.begin() as connection:

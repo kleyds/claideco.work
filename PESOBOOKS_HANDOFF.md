@@ -48,10 +48,14 @@ Stack:
 - Receipt list/detail:
   - `GET /v1/clients/{id}/receipts`
   - `GET /v1/receipts/{id}`
+- Receipt reprocess/retry:
+  - `POST /v1/receipts/{id}/reprocess`
 - Protected file access:
   - `GET /v1/receipts/{id}/file?token=...`
+- Protected image/PDF preview:
+  - `GET /v1/receipts/{id}/preview?token=...`
 - OCR/OpenAI extraction for image and PDF files
-- PDFs are rendered with PyMuPDF for OCR and previewed in-browser through the protected file route
+- PDFs are rendered with PyMuPDF for OCR and previewed in-app through the protected preview route
 - PH/BIR extraction fields:
   - vendor TIN
   - OR/SI number
@@ -67,11 +71,14 @@ Stack:
 - `/app/clients/:id/review`
 - Side-by-side document and editable fields
 - Approve/reject flow
+- Retry OCR action for failed receipts
 - Confidence highlighting
 - Enter-to-approve shortcut
 - Review page uses a fixed-height workbench layout on desktop
 - Queue, document/PDF preview, and extracted-field panes scroll independently with scroll chaining contained
-- PDF receipts preview inline using the browser PDF viewer; image receipts keep app-level zoom controls
+- PDF receipts preview as app-rendered page images so the native browser PDF download toolbar is not shown; image receipts keep app-level zoom controls
+- Document previews are anchored to the top center so zoomed-out PDFs do not float below blank space
+- Review queue cards clamp long file names so PDF names do not overflow the sidebar
 - Empty review queue shows an "You're all caught up" state with upload/archive actions
 
 ### Archive/Export
@@ -85,12 +92,14 @@ Stack:
 - CSV export:
   - `GET /v1/clients/{id}/export`
   - formats: `generic`, `qbo`, `xero`
-- Archive read-only detail panel:
-  - original document preview/link
+- Archive read-only detail modal:
+  - app-rendered image/PDF preview
+  - zoom controls
+  - fixed popup header with internal detail scrolling
   - extracted BIR fields
   - line items
   - raw OCR text
-- Protected receipt and 2307 file responses are served inline for browser preview
+- Protected receipt previews are served through app-rendered image/PDF page previews; 2307 file responses are served inline for browser preview
 
 ### Bank Reconciliation
 - Models:
@@ -98,6 +107,13 @@ Stack:
   - `reconciliations`
 - Bank CSV import:
   - `POST /v1/clients/{id}/bank/import`
+- Bank CSV template presets:
+  - Generic
+  - BDO
+  - BPI
+  - Metrobank
+  - UnionBank
+- Bank import skips likely duplicate rows and returns row-level parse errors for bad amount rows
 - Bank transaction list:
   - `GET /v1/clients/{id}/bank/transactions`
 - Match suggestions:
@@ -125,13 +141,20 @@ Stack:
   - `requested`
   - `received`
   - `attached`
+- Reconciliation-level 2307 workflow metadata:
+  - requested timestamp
+  - received timestamp
+  - attachment upload timestamp
+  - follow-up notes
 - Lightweight startup schema upgrade adds 2307 columns to existing `reconciliations` tables until Alembic exists
 - 2307 follow-up APIs:
   - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true`
-  - `PATCH /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307`
+  - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true&form_2307_status=requested`
+  - `PATCH /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307` for status and notes
   - `POST /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file`
   - `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file?token=...`
-- `/app/clients/:id/reconciliation` now includes a Form 2307 follow-up panel for withholding-variance matches
+- Status transitions automatically stamp requested/received dates, and `attached` requires a file upload
+- `/app/clients/:id/reconciliation` now includes a Form 2307 follow-up panel for withholding-variance matches, status filtering, timestamps, notes, and attachment links
 - 2307 attachments are stored locally under the upload root and support PDF/JPEG/PNG/WebP
 
 ## Important Files
@@ -170,25 +193,22 @@ High priority:
 
 ## Recommended Next Product Slices
 
-1. Reconciliation polish
-   - Better bank templates for BDO/BPI/Metrobank/UnionBank
-
-2. Compliance exports
+1. Compliance exports
    - SLSP/SAWT export
    - 4-column journal export
    - BIR deadline flags
 
-3. Client portal
+2. Client portal
    - Public upload links
    - Query/clarification flow
    - Mobile-first upload page
 
-4. Billing/limits
+3. Billing/limits
    - Receipt limits per plan
    - Paymongo integration
    - Billing status/settings page
 
-5. Deployment
+4. Deployment
    - Dockerfile/backend
    - Dockerfile/frontend or static build
    - docker-compose with DB

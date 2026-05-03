@@ -34,10 +34,57 @@ from app.schemas import (
 router = APIRouter(prefix="/clients/{client_id}/bank", tags=["bank"])
 
 FORM_2307_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+BANK_TEMPLATES = {
+    "generic": {
+        "label": "Generic",
+        "date": ["date", "transaction date", "posting date", "post date"],
+        "description": ["description", "details", "particulars", "merchant", "remarks"],
+        "reference": ["reference", "ref", "transaction id", "check no", "cheque no"],
+        "amount": ["amount", "transaction amount", "amt"],
+        "debit": ["debit", "withdrawal", "withdrawals", "debit amount"],
+        "credit": ["credit", "deposit", "deposits", "credit amount"],
+    },
+    "bdo": {
+        "label": "BDO",
+        "date": ["posting date", "transaction date", "date"],
+        "description": ["description", "transaction description", "details"],
+        "reference": ["reference no.", "reference number", "ref no", "ref"],
+        "amount": ["amount"],
+        "debit": ["debit", "withdrawal"],
+        "credit": ["credit", "deposit"],
+    },
+    "bpi": {
+        "label": "BPI",
+        "date": ["transaction date", "posted date", "date"],
+        "description": ["description", "transaction details", "remarks"],
+        "reference": ["branch", "reference", "confirmation no.", "trace no."],
+        "amount": ["amount"],
+        "debit": ["withdrawal", "debit"],
+        "credit": ["deposit", "credit"],
+    },
+    "metrobank": {
+        "label": "Metrobank",
+        "date": ["transaction date", "posting date", "date"],
+        "description": ["particulars", "description", "transaction particulars"],
+        "reference": ["reference no", "reference", "check no"],
+        "amount": ["amount"],
+        "debit": ["debit", "withdrawal"],
+        "credit": ["credit", "deposit"],
+    },
+    "unionbank": {
+        "label": "UnionBank",
+        "date": ["date", "transaction date", "posted date"],
+        "description": ["description", "transaction details", "merchant name"],
+        "reference": ["reference number", "reference no.", "ref no.", "trace number"],
+        "amount": ["amount", "transaction amount"],
+        "debit": ["debit amount", "debit", "withdrawal"],
+        "credit": ["credit amount", "credit", "deposit"],
+    },
+}
 
 
 def _first(row: dict[str, str], keys: list[str]) -> str:
-    normalized = {key.strip().lower(): value for key, value in row.items()}
+    normalized = {key.strip().lower(): (value or "") for key, value in row.items() if key}
     for key in keys:
         value = normalized.get(key)
         if value:
@@ -64,6 +111,13 @@ def _parse_date(value: str) -> Optional[str]:
         except ValueError:
             continue
     return value
+
+
+def _template_or_422(template: str) -> dict[str, list[str] | str]:
+    key = template.strip().lower()
+    if key not in BANK_TEMPLATES:
+        raise HTTPException(422, f"bank_template must be one of: {sorted(BANK_TEMPLATES)}")
+    return BANK_TEMPLATES[key]
 
 
 def _upload_root() -> Path:
@@ -106,23 +160,62 @@ def _reconciliation_or_404(reconciliation_id: int, client_id: int, user_id: int,
     return reconciliation
 
 
-def _transaction_from_row(client_id: int, user_id: int, row: dict[str, str], bank_name: Optional[str]) -> BankTransaction:
-    debit = _parse_amount(_first(row, ["debit", "withdrawal", "withdrawals", "debit amount"]))
-    credit = _parse_amount(_first(row, ["credit", "deposit", "deposits", "credit amount"]))
-    raw_amount = _first(row, ["amount", "transaction amount", "amt"])
+def _clean_notes(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _apply_form_2307_status(reconciliation: Reconciliation, status: str) -> None:
+    now = datetime.utcnow()
+    if status == "attached" and not reconciliation.form_2307_file_path:
+        raise HTTPException(422, "Upload a Form 2307 file before marking it attached")
+
+    reconciliation.form_2307_status = status
+    if status in {"requested", "received", "attached"} and not reconciliation.form_2307_requested_at:
+        reconciliation.form_2307_requested_at = now
+    if status in {"received", "attached"} and not reconciliation.form_2307_received_at:
+        reconciliation.form_2307_received_at = now
+
+
+def _transaction_fingerprint(transaction: BankTransaction) -> tuple[Optional[str], float, str, str, str]:
+    return (
+        transaction.transaction_date,
+        round(transaction.amount, 2),
+        transaction.direction,
+        (transaction.reference or "").strip().lower(),
+        transaction.description.strip().lower(),
+    )
+
+
+def _transaction_from_row(
+    client_id: int,
+    user_id: int,
+    row: dict[str, str],
+    bank_name: Optional[str],
+    template: dict[str, list[str] | str],
+) -> BankTransaction:
+    debit = _parse_amount(_first(row, template["debit"]))
+    credit = _parse_amount(_first(row, template["credit"]))
+    raw_amount = _first(row, template["amount"])
+    if not raw_amount and debit == 0 and credit == 0:
+        raise ValueError("missing amount/debit/credit value")
     amount = _parse_amount(raw_amount) if raw_amount else credit - debit
     direction = "inflow" if amount >= 0 else "outflow"
+    transaction_date = _parse_date(_first(row, template["date"]))
+    description = _first(row, template["description"]) or "Bank transaction"
 
     return BankTransaction(
         client_id=client_id,
         user_id=user_id,
         bank_name=bank_name,
-        transaction_date=_parse_date(_first(row, ["date", "transaction date", "posting date", "post date"])),
-        description=_first(row, ["description", "details", "particulars", "merchant", "remarks"]) or "Bank transaction",
-        reference=_first(row, ["reference", "ref", "transaction id", "check no", "cheque no"]),
+        transaction_date=transaction_date,
+        description=description,
+        reference=_first(row, template["reference"]),
         amount=abs(amount),
         direction=direction,
-        raw_json=row,
+        raw_json={**row, "_bank_template": template["label"]},
     )
 
 
@@ -131,6 +224,7 @@ async def import_bank_csv(
     client_id: int,
     file: UploadFile = File(...),
     bank_name: Optional[str] = None,
+    bank_template: str = "generic",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -142,18 +236,47 @@ async def import_bank_csv(
     reader = csv.DictReader(io.StringIO(content))
     if not reader.fieldnames:
         raise HTTPException(400, "CSV must include a header row")
+    template = _template_or_422(bank_template)
 
-    transactions = [
-        _transaction_from_row(client_id, current_user.id, row, bank_name)
-        for row in reader
-        if any((value or "").strip() for value in row.values())
-    ]
+    existing_transactions = db.scalars(
+        select(BankTransaction).where(
+            BankTransaction.client_id == client_id,
+            BankTransaction.user_id == current_user.id,
+        )
+    ).all()
+    fingerprints = {_transaction_fingerprint(transaction) for transaction in existing_transactions}
+
+    transactions = []
+    errors = []
+    skipped_duplicates = 0
+    for index, row in enumerate(reader, start=2):
+        if not any((value or "").strip() for value in row.values()):
+            continue
+        try:
+            transaction = _transaction_from_row(client_id, current_user.id, row, bank_name, template)
+        except ValueError as exc:
+            errors.append(f"Row {index}: {exc}")
+            continue
+
+        fingerprint = _transaction_fingerprint(transaction)
+        if fingerprint in fingerprints:
+            skipped_duplicates += 1
+            continue
+        fingerprints.add(fingerprint)
+        transactions.append(transaction)
+
     db.add_all(transactions)
     db.commit()
     for transaction in transactions:
         db.refresh(transaction)
 
-    return BankImportResponse(imported=len(transactions), transactions=transactions)
+    return BankImportResponse(
+        imported=len(transactions),
+        skipped_duplicates=skipped_duplicates,
+        skipped_errors=len(errors),
+        errors=errors[:10],
+        transactions=transactions,
+    )
 
 
 @router.get("/transactions", response_model=BankTransactionsResponse)
@@ -178,6 +301,7 @@ def list_bank_transactions(
 def list_reconciliations(
     client_id: int,
     requires_2307: Optional[bool] = None,
+    form_2307_status: Optional[str] = Query(None, pattern=r"^(missing|requested|received|attached)$"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -185,6 +309,8 @@ def list_reconciliations(
     statement = _reconciliation_statement(client_id, current_user.id)
     if requires_2307 is not None:
         statement = statement.where(Reconciliation.requires_2307 == ("true" if requires_2307 else "false"))
+    if form_2307_status:
+        statement = statement.where(Reconciliation.form_2307_status == form_2307_status)
     reconciliations = db.scalars(statement.order_by(Reconciliation.created_at.desc())).all()
     return ReconciliationsResponse(reconciliations=reconciliations)
 
@@ -202,7 +328,10 @@ def update_form_2307_status(
     if reconciliation.requires_2307 != "true":
         raise HTTPException(422, "This reconciliation does not require Form 2307")
 
-    reconciliation.form_2307_status = payload.status
+    if payload.status:
+        _apply_form_2307_status(reconciliation, payload.status)
+    if payload.notes is not None:
+        reconciliation.form_2307_notes = _clean_notes(payload.notes)
     db.commit()
     db.refresh(reconciliation)
     return reconciliation
@@ -238,7 +367,7 @@ async def upload_form_2307_file(
     reconciliation.form_2307_original_name = file.filename
     reconciliation.form_2307_mime_type = file.content_type
     reconciliation.form_2307_uploaded_at = datetime.utcnow()
-    reconciliation.form_2307_status = "attached"
+    _apply_form_2307_status(reconciliation, "attached")
     db.commit()
     db.refresh(reconciliation)
     return reconciliation

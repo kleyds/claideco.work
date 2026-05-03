@@ -38,28 +38,30 @@
         </button>
       </aside>
 
-      <main :class="['document-pane', { 'has-toolbar': isImage(currentReceipt) }]">
-        <div v-if="isImage(currentReceipt)" class="document-toolbar">
+      <main :class="['document-pane', { 'has-toolbar': canPreview(currentReceipt) }]">
+        <div v-if="canPreview(currentReceipt)" class="document-toolbar">
           <button type="button" @click="zoom = Math.max(0.5, zoom - 0.1)">-</button>
           <span>{{ Math.round(zoom * 100) }}%</span>
           <button type="button" @click="zoom = Math.min(2, zoom + 0.1)">+</button>
+          <button
+            v-if="currentReceipt?.status === 'error'"
+            type="button"
+            :disabled="reprocessing"
+            @click="reprocessCurrent"
+          >
+            {{ reprocessing ? 'Retrying...' : 'Retry OCR' }}
+          </button>
         </div>
         <div class="document-view">
           <img
-            v-if="isImage(currentReceipt)"
-            :src="fileUrl(currentReceipt)"
+            v-if="canPreview(currentReceipt)"
+            :src="previewUrl(currentReceipt)"
             :style="{ transform: `scale(${zoom})` }"
             alt="Uploaded receipt"
-          />
-          <iframe
-            v-else-if="isPdf(currentReceipt)"
-            :src="fileUrl(currentReceipt)"
-            title="Uploaded PDF receipt"
           />
           <div v-else class="pdf-placeholder">
             <h2>Preview unavailable</h2>
             <p>This file type cannot be previewed in the browser.</p>
-            <a :href="fileUrl(currentReceipt)" target="_blank" rel="noreferrer">Open file</a>
           </div>
         </div>
       </main>
@@ -72,6 +74,9 @@
           </div>
           <span :class="['confidence', confidenceClass]">{{ confidenceLabel }}</span>
         </div>
+        <p v-if="currentReceipt?.error_message" class="extraction-note">
+          {{ currentReceipt.error_message }}
+        </p>
 
         <label :class="fieldClass">
           Vendor
@@ -174,6 +179,7 @@ const currentIndex = ref(0)
 const loading = ref(true)
 const error = ref('')
 const zoom = ref(1)
+const reprocessing = ref(false)
 
 const form = reactive(emptyForm())
 
@@ -252,9 +258,9 @@ function selectReceipt(index) {
   syncForm()
 }
 
-function fileUrl(receipt) {
+function previewUrl(receipt) {
   if (!receipt) return ''
-  return `${API_BASE_URL}/receipts/${receipt.id}/file?token=${encodeURIComponent(getToken())}`
+  return `${API_BASE_URL}/receipts/${receipt.id}/preview?token=${encodeURIComponent(getToken())}`
 }
 
 function isImage(receipt) {
@@ -265,12 +271,33 @@ function isPdf(receipt) {
   return receipt?.mime_type === 'application/pdf'
 }
 
+function canPreview(receipt) {
+  return isImage(receipt) || isPdf(receipt)
+}
+
 async function approve() {
   await saveReceipt('approved')
 }
 
 async function reject() {
   await saveReceipt('rejected')
+}
+
+async function reprocessCurrent() {
+  if (!currentReceipt.value) return
+  reprocessing.value = true
+  error.value = ''
+  try {
+    const updated = await apiFetch(`/receipts/${currentReceipt.value.id}/reprocess`, {
+      method: 'POST',
+    })
+    queue.value[currentIndex.value] = updated
+    syncForm()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    reprocessing.value = false
+  }
 }
 
 async function saveReceipt(status) {
@@ -377,10 +404,22 @@ function onKeydown(event) {
   border-radius: 8px;
   color: var(--text);
   cursor: pointer;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  min-width: 0;
   padding: 12px;
   text-align: left;
+  width: 100%;
+}
+.queue-list strong {
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
 }
 .queue-list button.active {
   border-color: var(--accent);
@@ -442,22 +481,18 @@ button {
 }
 .document-view {
   display: grid;
+  align-items: start;
+  justify-items: center;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  place-items: center;
   padding: 12px;
 }
 .document-view img {
   max-width: 100%;
-  transform-origin: center;
+  max-height: none;
+  transform-origin: top center;
   transition: transform 0.12s ease;
-}
-.document-view iframe {
-  border: 0;
-  height: 100%;
-  min-height: 0;
-  width: 100%;
 }
 .pdf-placeholder {
   max-width: 420px;
@@ -490,6 +525,14 @@ button {
 .form-head p {
   color: var(--muted);
   font-size: 0.9em;
+}
+.extraction-note {
+  background: rgba(250, 204, 21, 0.09);
+  border: 1px solid rgba(250, 204, 21, 0.24);
+  border-radius: 8px;
+  color: #fde68a;
+  font-size: 0.9em;
+  padding: 10px 12px;
 }
 label {
   color: var(--muted);
@@ -604,9 +647,6 @@ textarea {
   }
   .review-shell {
     grid-template-columns: 1fr;
-  }
-  .document-view iframe {
-    height: 70vh;
   }
   .queue-list {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

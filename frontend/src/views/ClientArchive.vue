@@ -133,118 +133,137 @@
       </table>
     </section>
 
-    <section v-if="selectedReceipt" class="detail-panel">
-      <div class="detail-head">
-        <div>
-          <p class="eyebrow">Read-only detail</p>
-          <h2>{{ selectedReceipt.data?.vendor || selectedReceipt.original_name || `Receipt #${selectedReceipt.id}` }}</h2>
-          <p>{{ selectedReceipt.original_name }} - {{ selectedReceipt.status }}</p>
-        </div>
-        <button type="button" class="secondary" @click="selectedReceipt = null">Close</button>
-      </div>
-
-      <div class="detail-grid">
-        <aside class="document-preview">
-          <img v-if="isImage(selectedReceipt)" :src="fileUrl(selectedReceipt)" alt="Archived receipt" />
-          <iframe
-            v-else-if="isPdf(selectedReceipt)"
-            :src="fileUrl(selectedReceipt)"
-            title="Archived PDF receipt"
-          />
-          <div v-else class="pdf-placeholder">
-            <h3>Preview unavailable</h3>
-            <p>This file type cannot be previewed in the browser.</p>
+    <div
+      v-if="selectedReceipt"
+      class="detail-overlay"
+      role="presentation"
+      @click.self="closeReceipt"
+    >
+      <section class="detail-panel" role="dialog" aria-modal="true" aria-labelledby="receipt-detail-title">
+        <div class="detail-head">
+          <div>
+            <p class="eyebrow">Read-only detail</p>
+            <h2 id="receipt-detail-title">
+              {{ selectedReceipt.data?.vendor || selectedReceipt.original_name || `Receipt #${selectedReceipt.id}` }}
+            </h2>
+            <p>{{ selectedReceipt.original_name }} - {{ selectedReceipt.status }}</p>
           </div>
-          <a :href="fileUrl(selectedReceipt)" target="_blank" rel="noreferrer">Open original file</a>
-        </aside>
-
-        <div class="detail-content">
-          <dl class="field-grid">
-            <div>
-              <dt>Date</dt>
-              <dd>{{ selectedReceipt.data?.date || '-' }}</dd>
-            </div>
-            <div>
-              <dt>Vendor TIN</dt>
-              <dd>{{ selectedReceipt.data?.vendor_tin || '-' }}</dd>
-            </div>
-            <div>
-              <dt>OR number</dt>
-              <dd>{{ selectedReceipt.data?.or_number || '-' }}</dd>
-            </div>
-            <div>
-              <dt>SI number</dt>
-              <dd>{{ selectedReceipt.data?.si_number || '-' }}</dd>
-            </div>
-            <div>
-              <dt>Document type</dt>
-              <dd>{{ label(selectedReceipt.data?.doc_type) }}</dd>
-            </div>
-            <div>
-              <dt>VAT type</dt>
-              <dd>{{ label(selectedReceipt.data?.vat_type) }}</dd>
-            </div>
-            <div>
-              <dt>Vatable amount</dt>
-              <dd>{{ formatAmount(selectedReceipt.data?.vatable_amount, selectedReceipt.data?.currency) }}</dd>
-            </div>
-            <div>
-              <dt>VAT amount</dt>
-              <dd>{{ formatAmount(selectedReceipt.data?.vat_amount, selectedReceipt.data?.currency) }}</dd>
-            </div>
-            <div>
-              <dt>Subtotal</dt>
-              <dd>{{ formatAmount(selectedReceipt.data?.subtotal, selectedReceipt.data?.currency) }}</dd>
-            </div>
-            <div>
-              <dt>Total</dt>
-              <dd>{{ formatAmount(selectedReceipt.data?.total, selectedReceipt.data?.currency) }}</dd>
-            </div>
-            <div>
-              <dt>Confidence</dt>
-              <dd>{{ formatConfidence(selectedReceipt.data?.confidence) }}</dd>
-            </div>
-            <div>
-              <dt>Processed</dt>
-              <dd>{{ formatDateTime(selectedReceipt.processed_at) }}</dd>
-            </div>
-          </dl>
-
-          <section class="line-items">
-            <h3>Line items</h3>
-            <div v-if="selectedReceipt.line_items.length === 0" class="empty">No line items captured.</div>
-            <table v-else>
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in selectedReceipt.line_items" :key="item.id">
-                  <td>{{ item.description }}</td>
-                  <td>{{ item.quantity ?? '-' }}</td>
-                  <td>{{ formatAmount(item.unit_price, selectedReceipt.data?.currency) }}</td>
-                  <td>{{ formatAmount(item.total, selectedReceipt.data?.currency) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-
-          <section class="raw-text">
-            <h3>Raw OCR text</h3>
-            <textarea :value="selectedReceipt.raw_text || 'No OCR text captured.'" readonly rows="8" />
-          </section>
+          <button type="button" class="secondary" @click="closeReceipt">Close</button>
         </div>
-      </div>
-    </section>
+
+        <div class="detail-grid">
+          <aside class="document-preview">
+            <div v-if="canPreview(selectedReceipt)" class="preview-toolbar">
+              <button type="button" class="secondary compact" @click="previewZoom = Math.max(0.5, previewZoom - 0.1)">
+                -
+              </button>
+              <span>{{ Math.round(previewZoom * 100) }}%</span>
+              <button type="button" class="secondary compact" @click="previewZoom = Math.min(2, previewZoom + 0.1)">
+                +
+              </button>
+            </div>
+            <div class="preview-canvas">
+              <img
+                v-if="canPreview(selectedReceipt)"
+                :src="previewUrl(selectedReceipt)"
+                :style="{ width: `${previewZoom * 100}%` }"
+                alt="Archived receipt"
+              />
+              <div v-else class="pdf-placeholder">
+                <h3>Preview unavailable</h3>
+                <p>This file type cannot be previewed in the browser.</p>
+              </div>
+            </div>
+          </aside>
+
+          <div class="detail-content">
+            <dl class="field-grid">
+              <div>
+                <dt>Date</dt>
+                <dd>{{ selectedReceipt.data?.date || '-' }}</dd>
+              </div>
+              <div>
+                <dt>Vendor TIN</dt>
+                <dd>{{ selectedReceipt.data?.vendor_tin || '-' }}</dd>
+              </div>
+              <div>
+                <dt>OR number</dt>
+                <dd>{{ selectedReceipt.data?.or_number || '-' }}</dd>
+              </div>
+              <div>
+                <dt>SI number</dt>
+                <dd>{{ selectedReceipt.data?.si_number || '-' }}</dd>
+              </div>
+              <div>
+                <dt>Document type</dt>
+                <dd>{{ label(selectedReceipt.data?.doc_type) }}</dd>
+              </div>
+              <div>
+                <dt>VAT type</dt>
+                <dd>{{ label(selectedReceipt.data?.vat_type) }}</dd>
+              </div>
+              <div>
+                <dt>Vatable amount</dt>
+                <dd>{{ formatAmount(selectedReceipt.data?.vatable_amount, selectedReceipt.data?.currency) }}</dd>
+              </div>
+              <div>
+                <dt>VAT amount</dt>
+                <dd>{{ formatAmount(selectedReceipt.data?.vat_amount, selectedReceipt.data?.currency) }}</dd>
+              </div>
+              <div>
+                <dt>Subtotal</dt>
+                <dd>{{ formatAmount(selectedReceipt.data?.subtotal, selectedReceipt.data?.currency) }}</dd>
+              </div>
+              <div>
+                <dt>Total</dt>
+                <dd>{{ formatAmount(selectedReceipt.data?.total, selectedReceipt.data?.currency) }}</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd>{{ formatConfidence(selectedReceipt.data?.confidence) }}</dd>
+              </div>
+              <div>
+                <dt>Processed</dt>
+                <dd>{{ formatDateTime(selectedReceipt.processed_at) }}</dd>
+              </div>
+            </dl>
+
+            <section class="line-items">
+              <h3>Line items</h3>
+              <div v-if="selectedReceipt.line_items.length === 0" class="empty">No line items captured.</div>
+              <table v-else>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in selectedReceipt.line_items" :key="item.id">
+                    <td>{{ item.description }}</td>
+                    <td>{{ item.quantity ?? '-' }}</td>
+                    <td>{{ formatAmount(item.unit_price, selectedReceipt.data?.currency) }}</td>
+                    <td>{{ formatAmount(item.total, selectedReceipt.data?.currency) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="raw-text">
+              <h3>Raw OCR text</h3>
+              <textarea :value="selectedReceipt.raw_text || 'No OCR text captured.'" readonly rows="8" />
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL, apiFetch, clearToken, getToken } from '../api'
 
@@ -257,6 +276,7 @@ const selectedReceipt = ref(null)
 const loading = ref(true)
 const error = ref('')
 const exportFormat = ref('generic')
+const previewZoom = ref(1)
 const filters = reactive(defaultFilters())
 
 const totalAmount = computed(() =>
@@ -273,6 +293,16 @@ onMounted(async () => {
   } catch (err) {
     handleError(err)
   }
+  window.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
+})
+
+watch(selectedReceipt, (receipt) => {
+  document.body.style.overflow = receipt ? 'hidden' : ''
 })
 
 function defaultFilters() {
@@ -306,10 +336,21 @@ async function loadArchive() {
 
 async function openReceipt(receipt) {
   error.value = ''
+  previewZoom.value = 1
   try {
     selectedReceipt.value = await apiFetch(`/receipts/${receipt.id}`)
   } catch (err) {
     handleError(err)
+  }
+}
+
+function closeReceipt() {
+  selectedReceipt.value = null
+}
+
+function onKeydown(event) {
+  if (event.key === 'Escape' && selectedReceipt.value) {
+    closeReceipt()
   }
 }
 
@@ -367,9 +408,9 @@ function handleError(err) {
   error.value = err.message
 }
 
-function fileUrl(receipt) {
+function previewUrl(receipt) {
   if (!receipt) return ''
-  return `${API_BASE_URL}/receipts/${receipt.id}/file?token=${encodeURIComponent(getToken() || '')}`
+  return `${API_BASE_URL}/receipts/${receipt.id}/preview?token=${encodeURIComponent(getToken() || '')}`
 }
 
 function isImage(receipt) {
@@ -378,6 +419,10 @@ function isImage(receipt) {
 
 function isPdf(receipt) {
   return receipt?.mime_type === 'application/pdf'
+}
+
+function canPreview(receipt) {
+  return isImage(receipt) || isPdf(receipt)
 }
 
 function label(value) {
@@ -584,8 +629,25 @@ tr.selected td {
   color: #fca5a5;
   margin-bottom: 18px;
 }
+.detail-overlay {
+  align-items: center;
+  background: rgba(10, 12, 17, 0.76);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 30;
+}
 .detail-panel {
-  margin-top: 18px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(860px, calc(100vh - 48px));
+  max-height: min(860px, calc(100vh - 48px));
+  max-width: min(1360px, calc(100vw - 48px));
+  overflow: hidden;
+  width: 100%;
 }
 .detail-head {
   align-items: flex-start;
@@ -604,31 +666,54 @@ tr.selected td {
 .detail-grid {
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+  grid-template-columns: minmax(520px, 1.35fr) minmax(360px, 0.9fr);
+  min-height: 0;
 }
 .document-preview {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
+  align-content: start;
   display: grid;
-  gap: 12px;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
   padding: 12px;
+}
+.preview-toolbar {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  margin: -12px -12px 12px;
+  padding: 10px 12px;
+}
+.preview-toolbar span {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 48px;
+  text-align: center;
+}
+.preview-canvas {
+  align-items: start;
+  display: grid;
+  height: 100%;
+  justify-items: center;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.preview-canvas::-webkit-scrollbar {
+  display: none;
 }
 .document-preview img {
   border-radius: 6px;
-  max-height: 520px;
+  align-self: start;
+  height: auto;
+  max-width: none;
   object-fit: contain;
-  width: 100%;
-}
-.document-preview iframe {
-  border: 0;
-  border-radius: 6px;
-  height: 520px;
-  width: 100%;
-}
-.document-preview a {
-  color: var(--accent-hover);
-  font-weight: 600;
+  transition: width 0.12s ease;
 }
 .pdf-placeholder {
   border: 1px dashed var(--border);
@@ -643,6 +728,10 @@ tr.selected td {
 .detail-content {
   display: grid;
   gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 .field-grid {
   display: grid;
@@ -697,6 +786,18 @@ dd {
   }
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+  .detail-overlay {
+    align-items: stretch;
+    padding: 12px;
+  }
+  .detail-panel {
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+    max-width: calc(100vw - 24px);
+  }
+  .document-preview {
+    min-height: 52vh;
   }
   .export-actions {
     width: 100%;

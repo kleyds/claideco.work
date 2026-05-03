@@ -147,6 +147,9 @@ class Reconciliation(Base):
     form_2307_original_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     form_2307_mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     form_2307_uploaded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    form_2307_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    form_2307_received_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    form_2307_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     receipt: Mapped[Receipt] = relationship()

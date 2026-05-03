@@ -14,6 +14,11 @@
         <p>Supports common Date, Description, Amount, Debit/Credit, and Reference columns from PH bank exports.</p>
       </div>
       <form @submit.prevent="importCsv">
+        <select v-model="bankTemplate" aria-label="Bank CSV template">
+          <option v-for="template in bankTemplates" :key="template.value" :value="template.value">
+            {{ template.label }}
+          </option>
+        </select>
         <input v-model="bankName" type="text" placeholder="Bank name, e.g. BPI" />
         <input ref="fileInput" type="file" accept=".csv,text/csv" @change="onFileChange" />
         <button type="submit" :disabled="uploading || !selectedFile">
@@ -21,6 +26,14 @@
         </button>
       </form>
       <p v-if="message" class="notice">{{ message }}</p>
+      <div v-if="importSummary" class="import-summary">
+        <span>{{ importSummary.imported }} imported</span>
+        <span>{{ importSummary.skipped_duplicates }} duplicate{{ importSummary.skipped_duplicates === 1 ? '' : 's' }} skipped</span>
+        <span>{{ importSummary.skipped_errors }} error{{ importSummary.skipped_errors === 1 ? '' : 's' }}</span>
+      </div>
+      <ul v-if="importSummary?.errors?.length" class="import-errors">
+        <li v-for="item in importSummary.errors" :key="item">{{ item }}</li>
+      </ul>
     </section>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -160,7 +173,15 @@
           <h2>Form 2307 follow-up</h2>
           <p>Withholding variance matches that need certificates.</p>
         </div>
-        <button type="button" @click="loadForm2307Items">Refresh</button>
+        <div class="toolbar">
+          <select v-model="form2307StatusFilter" aria-label="Form 2307 status filter" @change="loadForm2307Items">
+            <option value="">All statuses</option>
+            <option v-for="status in form2307Statuses" :key="status" :value="status">
+              {{ statusLabel(status) }}
+            </option>
+          </select>
+          <button type="button" @click="loadForm2307Items">Refresh</button>
+        </div>
       </div>
 
       <div v-if="loading2307" class="empty">Loading Form 2307 follow-ups...</div>
@@ -178,6 +199,20 @@
               {{ item.bank_transaction.description }}
               {{ item.bank_transaction.reference ? `- ${item.bank_transaction.reference}` : '' }}
             </p>
+            <dl class="form-2307-timeline">
+              <div>
+                <dt>Requested</dt>
+                <dd>{{ formatDateTime(item.form_2307_requested_at) }}</dd>
+              </div>
+              <div>
+                <dt>Received</dt>
+                <dd>{{ formatDateTime(item.form_2307_received_at) }}</dd>
+              </div>
+              <div>
+                <dt>Attached</dt>
+                <dd>{{ formatDateTime(item.form_2307_uploaded_at) }}</dd>
+              </div>
+            </dl>
           </div>
 
           <div class="form-2307-status">
@@ -188,7 +223,12 @@
               aria-label="Form 2307 status"
               @change="updateForm2307Status(item, $event.target.value)"
             >
-              <option v-for="status in form2307Statuses" :key="status" :value="status">
+              <option
+                v-for="status in form2307Statuses"
+                :key="status"
+                :value="status"
+                :disabled="status === 'attached' && !item.has_form_2307_file"
+              >
                 {{ statusLabel(status) }}
               </option>
             </select>
@@ -204,6 +244,19 @@
             <a v-if="item.has_form_2307_file" :href="form2307FileUrl(item)" target="_blank" rel="noreferrer">
               {{ item.form_2307_original_name || 'Open attached 2307' }}
             </a>
+          </form>
+
+          <form class="form-2307-notes" @submit.prevent="saveForm2307Notes(item)">
+            <textarea
+              v-model="item.form_2307_notes"
+              rows="3"
+              maxlength="2000"
+              placeholder="Follow-up notes"
+              :disabled="updating2307[item.id]"
+            ></textarea>
+            <button type="submit" :disabled="updating2307[item.id]">
+              {{ updating2307[item.id] ? 'Saving...' : 'Save notes' }}
+            </button>
           </form>
         </article>
       </div>
@@ -230,7 +283,10 @@ const selectedFile = ref(null)
 const selectedTransactions = ref([])
 const fileInput = ref(null)
 const bankName = ref('')
+const bankTemplate = ref('generic')
 const bulkCategory = ref('')
+const form2307StatusFilter = ref('')
+const importSummary = ref(null)
 const loading = ref(true)
 const loadingReconciled = ref(true)
 const loading2307 = ref(true)
@@ -243,6 +299,13 @@ const manualSearchRan = ref(false)
 const error = ref('')
 const message = ref('')
 const form2307Statuses = ['missing', 'requested', 'received', 'attached']
+const bankTemplates = [
+  { value: 'generic', label: 'Generic CSV' },
+  { value: 'bdo', label: 'BDO' },
+  { value: 'bpi', label: 'BPI' },
+  { value: 'metrobank', label: 'Metrobank' },
+  { value: 'unionbank', label: 'UnionBank' },
+]
 
 onMounted(async () => {
   try {
@@ -256,6 +319,7 @@ onMounted(async () => {
 function onFileChange(event) {
   selectedFile.value = event.target.files?.[0] || null
   message.value = ''
+  importSummary.value = null
 }
 
 async function importCsv() {
@@ -263,17 +327,20 @@ async function importCsv() {
   uploading.value = true
   error.value = ''
   message.value = ''
+  importSummary.value = null
 
   const body = new FormData()
   body.append('file', selectedFile.value)
 
   try {
-    const query = bankName.value ? `?bank_name=${encodeURIComponent(bankName.value)}` : ''
-    const data = await apiFetch(`/clients/${clientId}/bank/import${query}`, {
+    const params = new URLSearchParams({ bank_template: bankTemplate.value })
+    if (bankName.value) params.set('bank_name', bankName.value)
+    const data = await apiFetch(`/clients/${clientId}/bank/import?${params.toString()}`, {
       method: 'POST',
       body,
     })
-    message.value = `${data.imported} bank transaction${data.imported === 1 ? '' : 's'} imported.`
+    importSummary.value = data
+    message.value = importMessage(data)
     selectedFile.value = null
     if (fileInput.value) fileInput.value.value = ''
     await loadTransactions()
@@ -317,7 +384,9 @@ async function loadForm2307Items() {
   loading2307.value = true
   error.value = ''
   try {
-    const data = await apiFetch(`/clients/${clientId}/bank/reconciliations?requires_2307=true`)
+    const params = new URLSearchParams({ requires_2307: 'true' })
+    if (form2307StatusFilter.value) params.set('form_2307_status', form2307StatusFilter.value)
+    const data = await apiFetch(`/clients/${clientId}/bank/reconciliations?${params.toString()}`)
     form2307Items.value = data.reconciliations
   } catch (err) {
     handleError(err)
@@ -438,7 +507,7 @@ async function updateForm2307Status(item, status) {
       body: JSON.stringify({ status }),
     })
     message.value = `Form 2307 marked ${statusLabel(status).toLowerCase()}.`
-    await loadForm2307Items()
+    await Promise.all([loadForm2307Items(), loadReconciledItems()])
   } catch (err) {
     handleError(err)
   } finally {
@@ -466,13 +535,42 @@ async function uploadForm2307File(item, event) {
     })
     message.value = 'Form 2307 attached.'
     event.target.value = ''
-    await loadForm2307Items()
+    await Promise.all([loadForm2307Items(), loadReconciledItems()])
   } catch (err) {
     handleError(err)
   } finally {
     const next = { ...uploading2307.value }
     delete next[item.id]
     uploading2307.value = next
+  }
+}
+
+function importMessage(data) {
+  const pieces = [`${data.imported} imported`]
+  if (data.skipped_duplicates) {
+    pieces.push(`${data.skipped_duplicates} duplicate${data.skipped_duplicates === 1 ? '' : 's'} skipped`)
+  }
+  if (data.skipped_errors) pieces.push(`${data.skipped_errors} row error${data.skipped_errors === 1 ? '' : 's'}`)
+  return `Bank import complete: ${pieces.join(', ')}.`
+}
+
+async function saveForm2307Notes(item) {
+  updating2307.value = { ...updating2307.value, [item.id]: true }
+  error.value = ''
+  message.value = ''
+  try {
+    await apiFetch(`/clients/${clientId}/bank/reconciliations/${item.id}/2307`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes: item.form_2307_notes || '' }),
+    })
+    message.value = 'Form 2307 notes saved.'
+    await Promise.all([loadForm2307Items(), loadReconciledItems()])
+  } catch (err) {
+    handleError(err)
+  } finally {
+    const next = { ...updating2307.value }
+    delete next[item.id]
+    updating2307.value = next
   }
 }
 
@@ -506,6 +604,14 @@ function formatAmount(value, currency = 'PHP') {
     style: 'currency',
     currency: currency || 'PHP',
   }).format(value)
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('en-PH', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }
 </script>
 
@@ -562,13 +668,18 @@ form,
   justify-content: flex-end;
 }
 input,
-select {
+select,
+textarea {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text);
   font: inherit;
   padding: 10px 12px;
+}
+textarea {
+  min-width: 240px;
+  resize: vertical;
 }
 button {
   background: var(--accent);
@@ -587,6 +698,25 @@ button:disabled {
 .notice {
   color: #86efac !important;
   grid-column: 1 / -1;
+}
+.import-summary {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+.import-summary span {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 9px;
+}
+.import-errors {
+  color: #fca5a5;
+  font-size: 0.9em;
+  grid-column: 1 / -1;
+  list-style-position: inside;
 }
 .section-head {
   align-items: center;
@@ -695,22 +825,43 @@ button:disabled {
   gap: 10px;
 }
 .form-2307-card {
-  grid-template-columns: 1fr auto minmax(220px, auto);
+  align-items: start;
+  grid-template-columns: minmax(260px, 1fr) auto minmax(220px, auto) minmax(260px, 0.8fr);
 }
 .form-2307-main span {
   color: var(--muted);
   font-size: 0.82em;
 }
 .form-2307-status,
-.form-2307-upload {
+.form-2307-upload,
+.form-2307-notes {
   display: grid;
   gap: 8px;
   justify-items: end;
+}
+.form-2307-timeline {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+.form-2307-timeline div {
+  display: flex;
+  gap: 8px;
+}
+.form-2307-timeline dt {
+  color: var(--muted);
+  min-width: 76px;
+}
+.form-2307-timeline dd {
+  color: var(--text);
 }
 .form-2307-upload a {
   color: var(--accent-hover);
   font-size: 0.9em;
   text-align: right;
+}
+.form-2307-notes textarea {
+  width: 100%;
 }
 .status-pill {
   border: 1px solid var(--border);
@@ -769,9 +920,13 @@ button:disabled {
   .toolbar,
   .reconciled-actions,
   .form-2307-status,
-  .form-2307-upload {
+  .form-2307-upload,
+  .form-2307-notes {
     justify-content: flex-start;
     justify-items: start;
+  }
+  .form-2307-notes textarea {
+    min-width: 0;
   }
 }
 </style>

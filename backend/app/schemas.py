@@ -216,6 +216,9 @@ class BankTransactionPublic(BaseModel):
 
 class BankImportResponse(BaseModel):
     imported: int
+    skipped_duplicates: int = 0
+    skipped_errors: int = 0
+    errors: List[str] = Field(default_factory=list)
     transactions: List[BankTransactionPublic]
 
 
@@ -255,6 +258,9 @@ class ReconciliationPublic(BaseModel):
     form_2307_original_name: Optional[str] = None
     form_2307_mime_type: Optional[str] = None
     form_2307_uploaded_at: Optional[datetime] = None
+    form_2307_requested_at: Optional[datetime] = None
+    form_2307_received_at: Optional[datetime] = None
+    form_2307_notes: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -271,7 +277,8 @@ class ReconciliationsResponse(BaseModel):
 
 
 class Form2307UpdateRequest(BaseModel):
-    status: str = Field(pattern=r"^(missing|requested|received|attached)$")
+    status: Optional[str] = Field(None, pattern=r"^(missing|requested|received|attached)$")
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
 class BulkCategorizeRequest(BaseModel):

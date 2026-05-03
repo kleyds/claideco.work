@@ -17,16 +17,18 @@ PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It curren
 - Batch receipt/invoice upload.
 - Image/PDF OCR and PH/BIR-aware OpenAI extraction.
 - Review queue with editable extracted fields.
-- Receipt archive with filters and read-only document detail.
+- Receipt archive with filters and read-only modal document detail.
 - CSV export for Generic, QuickBooks, and Xero formats.
 - Bank CSV import.
+- PH bank CSV template presets for Generic, BDO, BPI, Metrobank, and UnionBank imports.
+- Bank import duplicate skipping and row-level error reporting.
 - Reconciliation match suggestions, including 1%/2% withholding variance detection.
 - Reconciled transaction view with undo/unmatch and manual receipt search.
 - Form 2307 status tracking and attachment workflow.
 - Dashboard metrics for unprocessed invoices, unreconciled bank entries, and missing 2307s.
 - Bulk bank transaction categorization.
 
-PDF files are stored, previewed in the browser, and OCRed by rendering pages with PyMuPDF.
+PDF files are stored, previewed in-app as rendered page images, and OCRed by rendering pages with PyMuPDF.
 
 ## Prerequisites
 
@@ -151,7 +153,9 @@ Receipts:
 - `GET /v1/clients/{id}/receipts`
 - `GET /v1/clients/{id}/receipts/queue`
 - `GET /v1/receipts/{id}`
+- `POST /v1/receipts/{id}/reprocess`
 - `GET /v1/receipts/{id}/file?token=...`
+- `GET /v1/receipts/{id}/preview?token=...`
 - `PATCH /v1/receipts/{id}`
 
 Exports:
@@ -160,7 +164,7 @@ Exports:
 
 Bank/reconciliation:
 
-- `POST /v1/clients/{id}/bank/import`
+- `POST /v1/clients/{id}/bank/import?bank_template=generic|bdo|bpi|metrobank|unionbank`
 - `GET /v1/clients/{id}/bank/transactions`
 - `GET /v1/clients/{id}/bank/transactions/{tx_id}/matches`
 - `GET /v1/clients/{id}/bank/transactions/{tx_id}/manual-matches?q=...`
@@ -182,7 +186,6 @@ Legacy endpoint:
 See `PESOBOOKS_HANDOFF.md` for the fuller handoff. High-priority next slices:
 
 - Alembic migrations.
-- Better PH bank CSV templates for BDO/BPI/Metrobank/UnionBank.
 - Compliance exports: SLSP, SAWT, and 4-column journal.
 - Client portal upload links and clarification flow.
 - Docker deployment setup.
