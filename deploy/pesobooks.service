@@ -1,0 +1,32 @@
+# /etc/systemd/system/pesobooks.service
+# Keeps the FastAPI backend running and auto-restarts it on crash or reboot.
+
+[Unit]
+Description=PesoBooks FastAPI Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/pesobooks-api
+
+# Load environment variables from .env file
+EnvironmentFile=/var/www/pesobooks-api/.env
+
+# Use the venv Python
+ExecStart=/var/www/pesobooks-api/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info
+
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
