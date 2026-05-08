@@ -241,9 +241,14 @@
               :disabled="uploading2307[item.id]"
               @change="uploadForm2307File(item, $event)"
             />
-            <a v-if="item.has_form_2307_file" :href="form2307FileUrl(item)" target="_blank" rel="noreferrer">
+            <button
+              v-if="item.has_form_2307_file"
+              type="button"
+              class="link-button"
+              @click="openForm2307File(item)"
+            >
               {{ item.form_2307_original_name || 'Open attached 2307' }}
-            </a>
+            </button>
           </form>
 
           <form class="form-2307-notes" @submit.prevent="saveForm2307Notes(item)">
@@ -267,7 +272,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { API_BASE_URL, apiFetch, clearToken, getToken } from '../api'
+import { apiFetch, apiFetchBlob, clearToken } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -583,9 +588,28 @@ function handleError(err) {
   error.value = err.message
 }
 
-function form2307FileUrl(item) {
-  const token = encodeURIComponent(getToken() || '')
-  return `${API_BASE_URL}/clients/${clientId}/bank/reconciliations/${item.id}/2307/file?token=${token}`
+async function openForm2307File(item) {
+  error.value = ''
+  try {
+    const blob = await apiFetchBlob(
+      `/clients/${clientId}/bank/reconciliations/${item.id}/2307/file`,
+    )
+    const url = URL.createObjectURL(blob)
+    const opened = window.open(url, '_blank', 'noopener,noreferrer')
+    if (!opened) {
+      const link = document.createElement('a')
+      link.href = url
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      link.download = item.form_2307_original_name || 'form-2307'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (err) {
+    handleError(err)
+  }
 }
 
 function statusLabel(status) {
@@ -855,10 +879,19 @@ button:disabled {
 .form-2307-timeline dd {
   color: var(--text);
 }
-.form-2307-upload a {
+.form-2307-upload a,
+.form-2307-upload .link-button {
   color: var(--accent-hover);
   font-size: 0.9em;
   text-align: right;
+}
+.link-button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
 }
 .form-2307-notes textarea {
   width: 100%;

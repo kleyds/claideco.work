@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -21,6 +21,10 @@ class User(Base):
     billing_period_start: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     paymongo_customer_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     paymongo_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    verification_token: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    verification_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    verification_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     clients: Mapped[list["Client"]] = relationship(back_populates="owner")

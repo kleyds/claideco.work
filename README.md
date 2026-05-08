@@ -5,14 +5,14 @@ Independent software studio building back-office tools for Filipino bookkeepers,
 This monorepo contains:
 
 - `frontend/` - `claideco.work` site and PesoBooks web app.
-- `backend/` - PesoBooks API built with FastAPI, SQLAlchemy, Tesseract OCR, and OpenAI extraction.
+- `backend/` - PesoBooks API built with FastAPI, SQLAlchemy on PostgreSQL, Tesseract OCR, and OpenAI extraction.
 - `PESOBOOKS_HANDOFF.md` - implementation handoff and next-work checklist.
 
 ## PesoBooks
 
 PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It currently supports:
 
-- Bookkeeper signup/login with JWT auth.
+- Bookkeeper signup with email verification + JWT login.
 - Multi-client workspace.
 - Batch receipt/invoice upload.
 - Image/PDF OCR and PH/BIR-aware OpenAI extraction.
@@ -34,12 +34,22 @@ PDF files are stored, previewed in-app as rendered page images, and OCRed by ren
 
 1. Python 3.13 recommended.
 2. Node.js 20+.
-3. Tesseract OCR.
+3. PostgreSQL 14+ running locally (or any reachable Postgres instance).
+   - macOS: `brew install postgresql@16 && brew services start postgresql@16`
+   - Linux: `sudo apt install postgresql`
+   - Windows: install via the EnterpriseDB installer.
+   - Create a database and role, e.g.:
+     ```sql
+     CREATE ROLE pesobooks WITH LOGIN PASSWORD 'pesobooks';
+     CREATE DATABASE pesobooks OWNER pesobooks;
+     ```
+4. Tesseract OCR.
    - Windows: install from UB-Mannheim builds and set `TESSERACT_CMD` if it is not on PATH.
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
-4. OpenAI API key for extraction.
-5. PyMuPDF is installed from `backend/requirements.txt` for PDF OCR; no Poppler install is required.
+5. OpenAI API key for extraction.
+6. SMTP credentials for sending verification emails (Gmail, SendGrid, Mailgun, etc.). For Gmail, use an [app password](https://support.google.com/accounts/answer/185833) and set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`.
+7. PyMuPDF is installed from `backend/requirements.txt` for PDF OCR; no Poppler install is required.
 
 ## Backend Setup
 
@@ -63,14 +73,25 @@ TESSERACT_CMD=
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE_MB=20
 MAX_FILES_PER_UPLOAD=50
-DATABASE_URL=sqlite:///./pesobooks.db
+
+# PostgreSQL is required.
+DATABASE_URL=postgresql+psycopg2://pesobooks:pesobooks@localhost:5432/pesobooks
+
+# SMTP for verification emails. With Gmail, SMTP_USER is your address
+# and SMTP_PASSWORD is a 16-character Google App Password.
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=you@gmail.com
+SMTP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+SMTP_FROM=you@gmail.com
+SMTP_USE_TLS=true
+FRONTEND_BASE_URL=http://localhost:5174
 ```
 
-For MySQL, set:
+> SQLite is no longer supported. Provision PostgreSQL before starting the backend.
 
-```text
-DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/pesobooks
-```
+> If `SMTP_HOST` is unset, registration still succeeds and the verification link is
+> printed to the backend log so you can verify accounts during local development.
 
 Run the backend:
 
@@ -134,8 +155,10 @@ npm.cmd run build
 
 Auth:
 
-- `POST /v1/auth/register`
-- `POST /v1/auth/login`
+- `POST /v1/auth/register` (sends verification email; does not return a token)
+- `POST /v1/auth/verify-email` (consumes the token from the email and returns an access token)
+- `POST /v1/auth/resend-verification`
+- `POST /v1/auth/login` (rejects unverified users)
 - `GET /v1/auth/me`
 
 Clients:
@@ -154,8 +177,8 @@ Receipts:
 - `GET /v1/clients/{id}/receipts/queue`
 - `GET /v1/receipts/{id}`
 - `POST /v1/receipts/{id}/reprocess`
-- `GET /v1/receipts/{id}/file?token=...`
-- `GET /v1/receipts/{id}/preview?token=...`
+- `GET /v1/receipts/{id}/file` (Authorization header)
+- `GET /v1/receipts/{id}/preview` (Authorization header)
 - `PATCH /v1/receipts/{id}`
 
 Exports:
@@ -174,7 +197,7 @@ Bank/reconciliation:
 - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true`
 - `PATCH /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307`
 - `POST /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file`
-- `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file?token=...`
+- `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file` (Authorization header)
 - `PATCH /v1/clients/{id}/bank/transactions/category`
 
 Legacy endpoint:
