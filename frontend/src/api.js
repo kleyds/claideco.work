@@ -13,8 +13,14 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-export async function apiFetch(path, options = {}) {
+function buildAuthHeaders(extra = {}) {
+  const headers = { ...extra }
   const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
+
+export async function apiFetch(path, options = {}) {
   const isFormData = options.body instanceof FormData
   const headers = { ...(options.headers || {}) }
 
@@ -22,6 +28,7 @@ export async function apiFetch(path, options = {}) {
     headers['Content-Type'] = 'application/json'
   }
 
+  const token = getToken()
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
@@ -39,4 +46,27 @@ export async function apiFetch(path, options = {}) {
   }
 
   return data
+}
+
+export async function apiFetchBlob(path, options = {}) {
+  const headers = buildAuthHeaders(options.headers || {})
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  if (!res.ok) {
+    let detail = 'Request failed'
+    try {
+      const data = await res.json()
+      detail = data?.detail || detail
+    } catch (_err) {
+      // non-JSON body
+    }
+    const error = new Error(detail)
+    error.status = res.status
+    throw error
+  }
+  return res.blob()
+}
+
+export async function loadAuthorizedObjectUrl(path) {
+  const blob = await apiFetchBlob(path)
+  return URL.createObjectURL(blob)
 }

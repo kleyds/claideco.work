@@ -164,8 +164,8 @@
             </div>
             <div class="preview-canvas">
               <img
-                v-if="canPreview(selectedReceipt)"
-                :src="previewUrl(selectedReceipt)"
+                v-if="canPreview(selectedReceipt) && previewObjectUrl"
+                :src="previewObjectUrl"
                 :style="{ width: `${previewZoom * 100}%` }"
                 alt="Archived receipt"
               />
@@ -265,7 +265,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { API_BASE_URL, apiFetch, clearToken, getToken } from '../api'
+import { API_BASE_URL, apiFetch, clearToken, getToken, loadAuthorizedObjectUrl } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -277,6 +277,8 @@ const loading = ref(true)
 const error = ref('')
 const exportFormat = ref('generic')
 const previewZoom = ref(1)
+const previewObjectUrl = ref('')
+let previewRequestId = 0
 const filters = reactive(defaultFilters())
 
 const totalAmount = computed(() =>
@@ -299,11 +301,38 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   document.body.style.overflow = ''
+  releasePreview()
 })
 
 watch(selectedReceipt, (receipt) => {
   document.body.style.overflow = receipt ? 'hidden' : ''
+  loadPreview(receipt)
 })
+
+function releasePreview() {
+  if (previewObjectUrl.value) {
+    URL.revokeObjectURL(previewObjectUrl.value)
+    previewObjectUrl.value = ''
+  }
+}
+
+async function loadPreview(receipt) {
+  releasePreview()
+  if (!receipt || !canPreview(receipt)) return
+  const requestId = ++previewRequestId
+  try {
+    const url = await loadAuthorizedObjectUrl(`/receipts/${receipt.id}/preview`)
+    if (requestId !== previewRequestId) {
+      URL.revokeObjectURL(url)
+      return
+    }
+    previewObjectUrl.value = url
+  } catch (err) {
+    if (requestId === previewRequestId) {
+      handleError(err)
+    }
+  }
+}
 
 function defaultFilters() {
   return {
@@ -406,11 +435,6 @@ function handleError(err) {
     return
   }
   error.value = err.message
-}
-
-function previewUrl(receipt) {
-  if (!receipt) return ''
-  return `${API_BASE_URL}/receipts/${receipt.id}/preview?token=${encodeURIComponent(getToken() || '')}`
 }
 
 function isImage(receipt) {

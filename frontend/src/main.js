@@ -8,6 +8,7 @@ import Docs from './views/Docs.vue'
 import About from './views/About.vue'
 import Login from './views/Login.vue'
 import Signup from './views/Signup.vue'
+import VerifyEmail from './views/VerifyEmail.vue'
 import AppDashboard from './views/AppDashboard.vue'
 import ClientNew from './views/ClientNew.vue'
 import ClientDetail from './views/ClientDetail.vue'
@@ -28,6 +29,7 @@ const router = createRouter({
     { path: '/about', name: 'about', component: About },
     { path: '/login', name: 'login', component: Login },
     { path: '/signup', name: 'signup', component: Signup },
+    { path: '/verify-email', name: 'verify-email', component: VerifyEmail },
     { path: '/app', name: 'app', component: AppDashboard, meta: { requiresAuth: true } },
     { path: '/app/clients/new', name: 'client-new', component: ClientNew, meta: { requiresAuth: true } },
     { path: '/app/clients/:id', name: 'client-detail', component: ClientDetail, meta: { requiresAuth: true } },

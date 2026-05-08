@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth import get_current_user, user_from_token
+from app.auth import get_current_user
 from app.database import SessionLocal, get_db
 from app.extract import extract_receipt
 from app.models import Client, LineItemRecord, Receipt, ReceiptDataRecord, User
@@ -485,11 +485,10 @@ def get_receipt_file(
 @router.get("/receipts/{receipt_id}/preview")
 def get_receipt_preview(
     receipt_id: int,
-    token: str,
     page: int = Query(1, ge=1),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    current_user = user_from_token(token, db)
     receipt = _receipt_or_404(receipt_id, current_user.id, db)
     path = Path(receipt.file_path)
     if not path.exists():
