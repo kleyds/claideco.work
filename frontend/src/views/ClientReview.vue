@@ -54,8 +54,8 @@
         </div>
         <div class="document-view">
           <img
-            v-if="canPreview(currentReceipt)"
-            :src="previewUrl(currentReceipt)"
+            v-if="canPreview(currentReceipt) && previewObjectUrl"
+            :src="previewObjectUrl"
             :style="{ transform: `scale(${zoom})` }"
             alt="Uploaded receipt"
           />
@@ -166,9 +166,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { API_BASE_URL, apiFetch, clearToken, getToken } from '../api'
+import { apiFetch, clearToken, loadAuthorizedObjectUrl } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -180,6 +180,8 @@ const loading = ref(true)
 const error = ref('')
 const zoom = ref(1)
 const reprocessing = ref(false)
+const previewObjectUrl = ref('')
+let previewRequestId = 0
 
 const form = reactive(emptyForm())
 
@@ -203,6 +205,15 @@ const fieldClass = computed(() => ({
 onMounted(async () => {
   await loadQueue()
   window.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  releasePreview()
+})
+
+watch(currentReceipt, (receipt) => {
+  loadPreview(receipt)
 })
 
 async function loadQueue() {
@@ -258,9 +269,29 @@ function selectReceipt(index) {
   syncForm()
 }
 
-function previewUrl(receipt) {
-  if (!receipt) return ''
-  return `${API_BASE_URL}/receipts/${receipt.id}/preview?token=${encodeURIComponent(getToken())}`
+function releasePreview() {
+  if (previewObjectUrl.value) {
+    URL.revokeObjectURL(previewObjectUrl.value)
+    previewObjectUrl.value = ''
+  }
+}
+
+async function loadPreview(receipt) {
+  releasePreview()
+  if (!receipt || !canPreview(receipt)) return
+  const requestId = ++previewRequestId
+  try {
+    const url = await loadAuthorizedObjectUrl(`/receipts/${receipt.id}/preview`)
+    if (requestId !== previewRequestId) {
+      URL.revokeObjectURL(url)
+      return
+    }
+    previewObjectUrl.value = url
+  } catch (err) {
+    if (requestId === previewRequestId) {
+      error.value = err.message || 'Could not load preview'
+    }
+  }
 }
 
 function isImage(receipt) {

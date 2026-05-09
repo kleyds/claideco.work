@@ -2,77 +2,71 @@
   <div class="auth-page">
     <section class="auth-panel">
       <p class="eyebrow">PesoBooks</p>
-      <h1>Log in</h1>
-      <form @submit.prevent="onSubmit">
-        <label>
-          Email
-          <input v-model="email" type="email" autocomplete="email" required />
-        </label>
-        <label>
-          Password
-          <input v-model="password" type="password" autocomplete="current-password" required />
-        </label>
-        <p v-if="error" class="error">{{ error }}</p>
-        <p v-if="resendMessage" class="success">{{ resendMessage }}</p>
-        <button type="submit" :disabled="loading">
-          {{ loading ? 'Logging in...' : 'Log in' }}
-        </button>
-        <button
-          v-if="needsVerification"
-          type="button"
-          class="resend"
-          :disabled="resending"
-          @click="resendVerification"
-        >
-          {{ resending ? 'Sending...' : 'Resend verification email' }}
-        </button>
-      </form>
-      <p class="switch">
-        New to PesoBooks?
-        <router-link to="/signup">Create an account</router-link>
-      </p>
+      <h1>Verify email</h1>
+
+      <p v-if="status === 'pending'" class="info">Verifying your email...</p>
+
+      <template v-if="status === 'success'">
+        <p class="success">Your email is verified! Redirecting you to the app...</p>
+      </template>
+
+      <template v-if="status === 'error'">
+        <p class="error">{{ message }}</p>
+        <p class="info">Need a fresh link? Enter your email below.</p>
+        <form @submit.prevent="resend">
+          <label>
+            Email
+            <input v-model="email" type="email" autocomplete="email" required />
+          </label>
+          <p v-if="resendMessage" class="success">{{ resendMessage }}</p>
+          <button type="submit" :disabled="resending">
+            {{ resending ? 'Sending...' : 'Send a new link' }}
+          </button>
+        </form>
+        <p class="switch">
+          <router-link to="/login">Back to log in</router-link>
+        </p>
+      </template>
     </section>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiFetch, setToken } from '../api'
 
+const route = useRoute()
 const router = useRouter()
+const status = ref('pending')
+const message = ref('')
 const email = ref('')
-const password = ref('')
-const loading = ref(false)
-const error = ref('')
-const needsVerification = ref(false)
 const resending = ref(false)
 const resendMessage = ref('')
 
-async function onSubmit() {
-  loading.value = true
-  error.value = ''
-  resendMessage.value = ''
-  needsVerification.value = false
+onMounted(async () => {
+  const token = (route.query.token || '').toString().trim()
+  if (!token) {
+    status.value = 'error'
+    message.value = 'No verification token in this link.'
+    return
+  }
 
   try {
-    const data = await apiFetch('/auth/login', {
+    const data = await apiFetch('/auth/verify-email', {
       method: 'POST',
-      body: JSON.stringify({ email: email.value, password: password.value }),
+      body: JSON.stringify({ token }),
     })
     setToken(data.access_token)
-    router.push('/app')
+    status.value = 'success'
+    setTimeout(() => router.push('/app'), 1200)
   } catch (err) {
-    error.value = err.message
-    if (/verify/i.test(err.message)) {
-      needsVerification.value = true
-    }
-  } finally {
-    loading.value = false
+    status.value = 'error'
+    message.value = err.message || 'Verification failed.'
   }
-}
+})
 
-async function resendVerification() {
+async function resend() {
   resending.value = true
   resendMessage.value = ''
   try {
@@ -82,7 +76,7 @@ async function resendVerification() {
     })
     resendMessage.value = data?.message || 'A new verification email is on its way.'
   } catch (err) {
-    error.value = err.message
+    message.value = err.message
   } finally {
     resending.value = false
   }
@@ -111,11 +105,12 @@ async function resendVerification() {
   text-transform: uppercase;
 }
 h1 {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 form {
   display: grid;
   gap: 16px;
+  margin-top: 14px;
 }
 label {
   display: grid;
@@ -152,20 +147,22 @@ button:disabled {
 }
 .error {
   color: #fca5a5;
-  font-size: 0.92em;
+  font-size: 0.95em;
+  margin-bottom: 12px;
 }
 .success {
   color: #86efac;
-  font-size: 0.92em;
+  font-size: 0.95em;
+  margin-bottom: 12px;
 }
-button.resend {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
+.info {
+  color: var(--muted);
+  font-size: 0.95em;
+  line-height: 1.5;
 }
 .switch {
   color: var(--muted);
-  margin-top: 20px;
+  margin-top: 18px;
   font-size: 0.92em;
 }
 </style>

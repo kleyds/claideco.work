@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth import get_current_user, user_from_token
+from app.auth import get_current_user
 from app.client_routes import _client_or_404
 from app.database import get_db
 from app.models import BankTransaction, Receipt, ReceiptDataRecord, Reconciliation, User
@@ -377,10 +377,9 @@ async def upload_form_2307_file(
 def get_form_2307_file(
     client_id: int,
     reconciliation_id: int,
-    token: str,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    current_user = user_from_token(token, db)
     _client_or_404(client_id, current_user.id, db)
     reconciliation = _reconciliation_or_404(reconciliation_id, client_id, current_user.id, db)
     if not reconciliation.form_2307_file_path:

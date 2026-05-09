@@ -66,6 +66,23 @@ class AuthResponse(BaseModel):
     user: UserPublic
 
 
+class RegisterResponse(BaseModel):
+    message: str
+    email: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
+
+
+class SimpleMessageResponse(BaseModel):
+    message: str
+
+
 class MeResponse(BaseModel):
     user: UserPublic
 
