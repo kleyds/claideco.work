@@ -4,10 +4,12 @@
 
 Stack:
 - Frontend: Vue 3 + Vite, running on `http://127.0.0.1:5174`
-- Backend: FastAPI + SQLAlchemy, running on `http://127.0.0.1:8001`
-- Local DB fallback: SQLite via `DATABASE_URL`, PostgreSQL-compatible SQLAlchemy setup (psycopg 3)
-- Auth: JWT + bcrypt
+- Backend: FastAPI + SQLAlchemy 2 + Alembic, running on `http://127.0.0.1:8001`
+- Database: PostgreSQL (psycopg2-binary). SQLite still works for ad-hoc local testing because models use portable types, but production assumes Postgres
+- Auth: JWT + bcrypt with mandatory email verification
+- Email: SMTP via `app/email_service.py`; falls back to logging the verification link when `SMTP_HOST` is unset
 - File storage: local disk under `backend/uploads/`
+- Migrations: Alembic (`backend/alembic/`); pre-Alembic databases are auto-stamped to head on startup with column backfills first
 
 ## Implemented
 
@@ -17,12 +19,16 @@ Stack:
 - API docs page
 
 ### Auth
-- Signup/login frontend
-- `POST /v1/auth/register`
-- `POST /v1/auth/login`
+- Signup/login/verify-email frontend
+- `POST /v1/auth/register` — sends verification email; does NOT return a token
+- `POST /v1/auth/verify-email` — consumes the token from the email and returns the access token
+- `POST /v1/auth/resend-verification`
+- `POST /v1/auth/login` — rejects unverified users with a clear error
 - `GET /v1/auth/me`
 - JWT stored in `localStorage`
 - Protected `/app` routes
+- `users` table carries `is_verified`, `verification_token`, `verification_token_expires_at`, `verification_sent_at`
+- `app/email_service.py` sends HTML verification emails via SMTP; in dev, missing SMTP config logs the verification link to stdout
 
 ### Client Workspace
 - `Client` model
@@ -51,9 +57,9 @@ Stack:
 - Receipt reprocess/retry:
   - `POST /v1/receipts/{id}/reprocess`
 - Protected file access:
-  - `GET /v1/receipts/{id}/file?token=...`
+  - `GET /v1/receipts/{id}/file` (Authorization header)
 - Protected image/PDF preview:
-  - `GET /v1/receipts/{id}/preview?token=...`
+  - `GET /v1/receipts/{id}/preview` (Authorization header)
 - OCR/OpenAI extraction for image and PDF files
 - PDFs are rendered with PyMuPDF for OCR and previewed in-app through the protected preview route
 - PH/BIR extraction fields:
@@ -152,7 +158,7 @@ Stack:
   - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true&form_2307_status=requested`
   - `PATCH /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307` for status and notes
   - `POST /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file`
-  - `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file?token=...`
+  - `GET /v1/clients/{id}/bank/reconciliations/{reconciliation_id}/2307/file` (Authorization header)
 - Status transitions automatically stamp requested/received dates, and `attached` requires a file upload
 - `/app/clients/:id/reconciliation` now includes a Form 2307 follow-up panel for withholding-variance matches, status filtering, timestamps, notes, and attachment links
 - 2307 attachments are stored locally under the upload root and support PDF/JPEG/PNG/WebP
@@ -165,24 +171,33 @@ Backend:
 - `backend/app/models.py`
 - `backend/app/auth.py`
 - `backend/app/auth_routes.py`
+- `backend/app/email_service.py`
 - `backend/app/client_routes.py`
 - `backend/app/receipt_routes.py`
 - `backend/app/bank_routes.py`
+- `backend/app/compliance_routes.py`
+- `backend/app/portal_routes.py`
 - `backend/app/schemas.py`
 - `backend/app/extract.py`
 - `backend/app/ocr.py`
+- `backend/alembic/env.py`
+- `backend/alembic/versions/` (`5c15a1fe35aa` baseline, `c6cda2519628` upload links, `e864ea5fcdb6` user verification)
 
 Frontend:
 - `frontend/src/api.js`
 - `frontend/src/main.js`
+- `frontend/src/App.vue` (gates app chrome via `meta.publicChrome`)
 - `frontend/src/views/Login.vue`
 - `frontend/src/views/Signup.vue`
+- `frontend/src/views/VerifyEmail.vue`
 - `frontend/src/views/AppDashboard.vue`
 - `frontend/src/views/ClientNew.vue`
 - `frontend/src/views/ClientDetail.vue`
 - `frontend/src/views/ClientReview.vue`
 - `frontend/src/views/ClientArchive.vue`
 - `frontend/src/views/ClientReconciliation.vue`
+- `frontend/src/views/ClientCompliance.vue`
+- `frontend/src/views/ClientPortalUpload.vue` (public, no app chrome)
 
 ## Known Gaps / Needs Completion
 
