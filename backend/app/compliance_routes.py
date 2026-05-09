@@ -140,7 +140,7 @@ def export_slsp(
             bucket["vatable"] += vatable or (total - vat)
             bucket["vat"] += vat
 
-        if "service" in doc_type or "official receipt" in doc_type or doc_type == "or":
+        if "service" in doc_type or "official receipt" in doc_type or "official_receipt" in doc_type or doc_type == "or":
             bucket["services"] += total
 
         bucket["gross"] += total

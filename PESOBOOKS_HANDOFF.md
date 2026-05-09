@@ -229,7 +229,7 @@ Frontend:
 
 High priority:
 - PostgreSQL production validation
-- Automated regression tests for reconciliation, 2307 tracking, PDF OCR, portal comments, and dashboard metrics
+- Broaden automated regression tests beyond the current API coverage, especially OCR processing success/error paths, bank CSV import edge cases, and receipt review/export filters
 
 ### BIR Compliance
 - `GET /v1/clients/{id}/exports/slsp?quarter=YYYY-Qn` — Summary List of Purchases CSV grouped by supplier TIN
@@ -253,10 +253,8 @@ High priority:
    - production CORS/secret handling
 
 3. Regression test suite
-   - Reconciliation matching and 2307 tracking
-   - PDF OCR and multi-page preview
-   - Portal comments and notification paths
-   - Dashboard metrics
+   - Current backend API coverage: reconciliation matching and 2307 tracking, PDF multi-page preview, portal comments and notification path, dashboard metrics, upload limits, BIR export CSVs/deadlines, auth/email verification
+   - Next coverage candidates: OCR processing success/error paths, bank CSV import edge cases, receipt review edits/export filters
 
 ## Current Test Commands
 
@@ -265,6 +263,7 @@ Backend:
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m compileall app
+.\.venv\Scripts\python.exe -m pytest tests
 ```
 
 Frontend:

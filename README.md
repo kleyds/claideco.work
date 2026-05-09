@@ -119,6 +119,14 @@ Run the backend:
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
+Run backend regression tests:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests
+```
+
+Current regression coverage includes reconciliation and Form 2307 tracking, PDF page previews, portal comments, dashboard metrics, upload limits, BIR export CSVs/deadlines, and auth/email verification.
+
 API docs:
 
 ```text
@@ -248,5 +256,7 @@ Legacy endpoint:
 
 See `PESOBOOKS_HANDOFF.md` for the fuller handoff. High-priority next slices:
 
-- Automated regression tests for reconciliation, 2307 tracking, PDF OCR, portal comments, and dashboard metrics.
+- PostgreSQL production validation.
+- OCR processing success/error regression tests.
+- Bank CSV import and receipt review/export filter regression tests.
 - Docker deployment setup.
