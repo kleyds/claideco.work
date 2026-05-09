@@ -158,3 +158,21 @@ class Reconciliation(Base):
     @property
     def has_form_2307_file(self) -> bool:
         return bool(self.form_2307_file_path)
+
+
+class ClientUploadLink(Base):
+    __tablename__ = "client_upload_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    max_uploads: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    uploads_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client: Mapped[Client] = relationship()

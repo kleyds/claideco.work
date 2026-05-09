@@ -289,3 +289,35 @@ class BulkCategorizeRequest(BaseModel):
 class BulkCategorizeResponse(BaseModel):
     updated: int
     transactions: List[BankTransactionPublic]
+
+
+class UploadLinkCreateRequest(BaseModel):
+    label: Optional[str] = Field(None, max_length=255)
+    expires_in_days: Optional[int] = Field(None, ge=1, le=365)
+    max_uploads: Optional[int] = Field(None, ge=1, le=1000)
+
+
+class UploadLinkPublic(BaseModel):
+    id: int
+    client_id: int
+    token: str
+    label: Optional[str] = None
+    max_uploads: Optional[int] = None
+    uploads_count: int
+    expires_at: Optional[datetime] = None
+    revoked_at: Optional[datetime] = None
+    last_used_at: Optional[datetime] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UploadLinksResponse(BaseModel):
+    links: List[UploadLinkPublic]
+
+
+class PortalInfoResponse(BaseModel):
+    client_name: str
+    label: Optional[str] = None
+    uploads_remaining: Optional[int] = None
+    expires_at: Optional[datetime] = None

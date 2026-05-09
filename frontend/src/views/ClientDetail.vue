@@ -73,6 +73,68 @@
         <h2>Bank reconciliation</h2>
         <p>Import bank CSVs and find invoice matches with withholding variance checks.</p>
       </router-link>
+      <router-link :to="`/app/clients/${clientId}/compliance`">
+        <h2>BIR compliance</h2>
+        <p>SLSP, SAWT, 4-column journal, and upcoming BIR filing deadlines.</p>
+      </router-link>
+    </section>
+
+    <section class="portal-panel">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Client portal</p>
+          <h2>Public upload links</h2>
+          <p class="muted">Share a link so the client can drop receipts straight into the queue from their phone — no login required.</p>
+        </div>
+        <button type="button" @click="loadLinks">Refresh</button>
+      </div>
+
+      <form class="link-form" @submit.prevent="createLink">
+        <label>
+          Label
+          <input v-model="newLink.label" type="text" maxlength="120" placeholder="e.g. Q2 2026 receipts" />
+        </label>
+        <label>
+          Expires in (days)
+          <input v-model.number="newLink.expires_in_days" type="number" min="1" max="365" placeholder="optional" />
+        </label>
+        <label>
+          Max uploads
+          <input v-model.number="newLink.max_uploads" type="number" min="1" max="1000" placeholder="optional" />
+        </label>
+        <button type="submit" :disabled="creatingLink">
+          {{ creatingLink ? 'Creating...' : 'Create link' }}
+        </button>
+      </form>
+
+      <div v-if="links.length === 0" class="empty">No upload links yet.</div>
+      <table v-else class="link-table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>URL</th>
+            <th>Uploads</th>
+            <th>Expires</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="link in links" :key="link.id" :class="{ revoked: link.revoked_at }">
+            <td>{{ link.label || 'Unlabeled' }}</td>
+            <td class="url">
+              <code>{{ portalUrl(link.token) }}</code>
+              <button type="button" class="copy" @click="copyLink(link)">{{ copiedToken === link.token ? 'Copied' : 'Copy' }}</button>
+            </td>
+            <td>{{ link.uploads_count }}<span v-if="link.max_uploads"> / {{ link.max_uploads }}</span></td>
+            <td>{{ formatDate(link.expires_at) || 'Never' }}</td>
+            <td>{{ linkStatus(link) }}</td>
+            <td>
+              <button v-if="!link.revoked_at" type="button" class="danger" @click="revokeLink(link)">Revoke</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <section class="receipt-list">
@@ -128,10 +190,15 @@ const filePickerLabel = computed(() => {
   return `${selectedFiles.value.length} files selected`
 })
 
+const links = ref([])
+const newLink = ref({ label: '', expires_in_days: null, max_uploads: null })
+const creatingLink = ref(false)
+const copiedToken = ref('')
+
 onMounted(async () => {
   try {
     client.value = await apiFetch(`/clients/${clientId}`)
-    await loadReceipts()
+    await Promise.all([loadReceipts(), loadLinks()])
   } catch (err) {
     if (err.message.includes('credentials')) {
       clearToken()
@@ -180,6 +247,75 @@ async function uploadFiles() {
   } finally {
     uploading.value = false
   }
+}
+
+async function loadLinks() {
+  try {
+    const data = await apiFetch(`/clients/${clientId}/upload-links`)
+    links.value = data.links || []
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+async function createLink() {
+  creatingLink.value = true
+  error.value = ''
+  try {
+    const payload = {
+      label: newLink.value.label || null,
+      expires_in_days: newLink.value.expires_in_days || null,
+      max_uploads: newLink.value.max_uploads || null,
+    }
+    await apiFetch(`/clients/${clientId}/upload-links`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    newLink.value = { label: '', expires_in_days: null, max_uploads: null }
+    await loadLinks()
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    creatingLink.value = false
+  }
+}
+
+async function revokeLink(link) {
+  if (!confirm('Revoke this upload link? The client will no longer be able to upload through it.')) return
+  try {
+    await apiFetch(`/clients/${clientId}/upload-links/${link.id}`, { method: 'DELETE' })
+    await loadLinks()
+  } catch (err) {
+    error.value = err.message
+  }
+}
+
+function portalUrl(token) {
+  return `${window.location.origin}/portal/${token}`
+}
+
+async function copyLink(link) {
+  try {
+    await navigator.clipboard.writeText(portalUrl(link.token))
+    copiedToken.value = link.token
+    setTimeout(() => {
+      if (copiedToken.value === link.token) copiedToken.value = ''
+    }, 1500)
+  } catch {
+    // ignore
+  }
+}
+
+function linkStatus(link) {
+  if (link.revoked_at) return 'Revoked'
+  if (link.expires_at && new Date(link.expires_at) < new Date()) return 'Expired'
+  if (link.max_uploads && link.uploads_count >= link.max_uploads) return 'Exhausted'
+  return 'Active'
+}
+
+function formatDate(value) {
+  if (!value) return ''
+  return new Date(value).toLocaleDateString()
 }
 
 function softwareLabel(value) {
@@ -322,11 +458,68 @@ header {
   font-size: 0.94em;
 }
 .upload-panel,
-.receipt-list {
+.receipt-list,
+.portal-panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px;
+}
+.portal-panel {
+  margin-top: 28px;
+  display: grid;
+  gap: 16px;
+}
+.portal-panel .muted {
+  color: var(--muted);
+  font-size: 0.92em;
+  margin-top: 4px;
+}
+.link-form {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+.link-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.78em;
+  color: var(--muted);
+  text-transform: uppercase;
+  gap: 4px;
+}
+.link-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+}
+.link-table .url {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link-table .url code {
+  background: var(--bg);
+  border-radius: 4px;
+  font-size: 0.82em;
+  padding: 4px 6px;
+  word-break: break-all;
+}
+.link-table .copy {
+  font-size: 0.82em;
+  padding: 4px 8px;
+}
+.link-table tr.revoked {
+  opacity: 0.55;
+}
+button.danger {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+  font-size: 0.85em;
+  padding: 6px 10px;
 }
 .upload-panel {
   display: grid;
@@ -477,6 +670,9 @@ th {
   table {
     display: block;
     overflow-x: auto;
+  }
+  .link-form {
+    grid-template-columns: 1fr;
   }
 }
 </style>

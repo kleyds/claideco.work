@@ -67,7 +67,7 @@ Global tools (Hubdoc, Dext, Textract) are priced in USD, built for North America
 - **ASGI server:** Uvicorn
 - **OCR engine:** Tesseract (via `pytesseract`) + Pillow
 - **AI extraction:** OpenAI `gpt-4o-mini` (receipt → structured JSON)
-- **Database:** MySQL 8 (via `SQLAlchemy` + `PyMySQL` — not yet installed)
+- **Database:** PostgreSQL 16 (via `SQLAlchemy` + `psycopg` 3)
 - **Auth:** JWT (`python-jose`) + bcrypt password hashing — not yet installed
 - **Queue (v1):** Redis + RQ — not yet installed
 - **File storage (v0):** Local disk. (v1+: MinIO or S3-compatible)
@@ -478,7 +478,9 @@ GET    /
 
 ---
 
-## 12. MySQL Schema — Full MVP
+## 12. Database Schema — Full MVP
+
+> Reference DDL below uses MySQL syntax from the original PRD; the live schema is now managed by SQLAlchemy models + Alembic against PostgreSQL.
 
 ```sql
 CREATE TABLE users (
@@ -571,7 +573,7 @@ TESSERACT_CMD=                       # full path on Windows, blank elsewhere
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE_MB=20
 MAX_FILES_PER_UPLOAD=50
-DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/pesobooks
+DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/pesobooks
 PAYMONGO_SECRET_KEY=sk_...
 PAYMONGO_WEBHOOK_SECRET=whsec_...
 CORS_ORIGINS=http://localhost:5173,https://claideco.work
@@ -585,7 +587,7 @@ CORS_ORIGINS=http://localhost:5173,https://claideco.work
 |---|---|---|
 | Backend language | Python | Richer OCR/AI library ecosystem |
 | Frontend framework | Vue 3 + Vite | Already in codebase, developer familiarity |
-| Database | MySQL 8 | Simple, widely hosted, suits relational data |
+| Database | PostgreSQL 16 | Strong relational + JSON support, widely hosted, suits structured accounting data |
 | File storage v0 | Local disk | No S3 cost/complexity for early validation |
 | OCR engine | Tesseract | Free, runs locally, no per-page cost |
 | AI model | gpt-4o-mini | Cost-effective (~$0.001–0.005/receipt), handles noisy text |
@@ -600,7 +602,7 @@ CORS_ORIGINS=http://localhost:5173,https://claideco.work
 ## 15. Sprint Plan (suggested)
 
 ### Sprint 1 (Week 1–2): Foundation
-- MySQL setup + SQLAlchemy models for all MVP tables.
+- PostgreSQL setup + SQLAlchemy models for all MVP tables.
 - Auth endpoints (`/register`, `/login`, `/me`) + JWT dependency.
 - Replace hardcoded API key auth with JWT on all new routes.
 - Frontend: `/login` and `/signup` pages wired to API.
