@@ -78,6 +78,10 @@ _USER_COLUMNS: dict[str, str] = {
     "verification_sent_at": "TIMESTAMP",
 }
 
+_RECEIPT_COLUMNS: dict[str, str] = {
+    "upload_link_id": "INTEGER",
+}
+
 _ALLOWED_COLUMN_NAME = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
@@ -134,6 +138,8 @@ def init_db() -> None:
     if looks_pre_alembic:
         _add_missing_columns("reconciliations", _RECONCILIATION_COLUMNS)
         _add_missing_columns("users", _USER_COLUMNS)
+        _add_missing_columns("receipts", _RECEIPT_COLUMNS)
+        Base.metadata.create_all(bind=engine)
         command.stamp(cfg, "head")
     else:
         command.upgrade(cfg, "head")

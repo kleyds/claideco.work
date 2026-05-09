@@ -176,6 +176,27 @@ class LineItemPublic(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReceiptCommentPublic(BaseModel):
+    id: int
+    receipt_id: int
+    author_type: str
+    author_name: str
+    body: str
+    is_read_by_bookkeeper: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReceiptCommentCreateRequest(BaseModel):
+    author_name: Optional[str] = Field(None, max_length=255)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class ReceiptCommentsResponse(BaseModel):
+    comments: List[ReceiptCommentPublic]
+
+
 class ReceiptPublic(BaseModel):
     id: int
     client_id: int
@@ -190,6 +211,9 @@ class ReceiptPublic(BaseModel):
     processed_at: Optional[datetime] = None
     data: Optional[ReceiptDataPublic] = None
     line_items: List[LineItemPublic] = Field(default_factory=list)
+    comment_count: int = 0
+    unread_portal_comment_count: int = 0
+    latest_comment: Optional[ReceiptCommentPublic] = None
 
     model_config = {"from_attributes": True}
 

@@ -85,6 +85,9 @@
           <p class="eyebrow">Client portal</p>
           <h2>Public upload links</h2>
           <p class="muted">Share a link so the client can drop receipts straight into the queue from their phone — no login required.</p>
+          <p class="activity">
+            Portal activity: <strong>{{ totalUnreadPortalComments }}</strong> unread client comment{{ totalUnreadPortalComments === 1 ? '' : 's' }}
+          </p>
         </div>
         <button type="button" @click="loadLinks">Refresh</button>
       </div>
@@ -153,6 +156,7 @@
             <th>Vendor</th>
             <th>Total</th>
             <th>Confidence</th>
+            <th>Comments</th>
           </tr>
         </thead>
         <tbody>
@@ -162,9 +166,50 @@
             <td>{{ receipt.data?.vendor || '-' }}</td>
             <td>{{ formatAmount(receipt.data?.total, receipt.data?.currency) }}</td>
             <td>{{ formatConfidence(receipt.data?.confidence) }}</td>
+            <td>
+              <button type="button" class="comment-button" @click="openComments(receipt)">
+                {{ receipt.comment_count || 0 }}
+                <span v-if="receipt.unread_portal_comment_count">({{ receipt.unread_portal_comment_count }} unread)</span>
+              </button>
+            </td>
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section v-if="commentReceipt" class="comment-overlay" role="dialog" aria-modal="true" aria-labelledby="comment-title">
+      <div class="comment-panel">
+        <header>
+          <div>
+            <p class="eyebrow">Clarifications</p>
+            <h2 id="comment-title">{{ commentReceipt.original_name || `Receipt #${commentReceipt.id}` }}</h2>
+          </div>
+          <button type="button" @click="closeComments">Close</button>
+        </header>
+
+        <div v-if="commentsLoading" class="empty">Loading comments...</div>
+        <div v-else class="thread">
+          <p v-if="comments.length === 0" class="empty">No comments yet.</p>
+          <article v-for="comment in comments" :key="comment.id" :class="['comment', comment.author_type]">
+            <div>
+              <strong>{{ comment.author_name }}</strong>
+              <span>{{ comment.author_type === 'bookkeeper' ? 'Bookkeeper' : 'Client' }} · {{ formatDateTime(comment.created_at) }}</span>
+            </div>
+            <p>{{ comment.body }}</p>
+          </article>
+        </div>
+
+        <form class="comment-form" @submit.prevent="replyToComment">
+          <label>
+            Reply
+            <textarea v-model="replyBody" maxlength="2000" required placeholder="Reply to the client"></textarea>
+          </label>
+          <button type="submit" :disabled="replying">
+            {{ replying ? 'Sending...' : 'Send reply' }}
+          </button>
+        </form>
+        <p v-if="commentError" class="error">{{ commentError }}</p>
+      </div>
     </section>
   </div>
 </template>
@@ -194,6 +239,15 @@ const links = ref([])
 const newLink = ref({ label: '', expires_in_days: null, max_uploads: null })
 const creatingLink = ref(false)
 const copiedToken = ref('')
+const totalUnreadPortalComments = computed(() =>
+  receipts.value.reduce((sum, receipt) => sum + Number(receipt.unread_portal_comment_count || 0), 0)
+)
+const commentReceipt = ref(null)
+const comments = ref([])
+const commentsLoading = ref(false)
+const commentError = ref('')
+const replyBody = ref('')
+const replying = ref(false)
 
 onMounted(async () => {
   try {
@@ -212,6 +266,9 @@ onMounted(async () => {
 async function loadReceipts() {
   const data = await apiFetch(`/clients/${clientId}/receipts`)
   receipts.value = data.receipts
+  if (commentReceipt.value) {
+    commentReceipt.value = receipts.value.find((receipt) => receipt.id === commentReceipt.value.id) || commentReceipt.value
+  }
 }
 
 function onFilesChange(event) {
@@ -306,6 +363,49 @@ async function copyLink(link) {
   }
 }
 
+async function openComments(receipt) {
+  commentReceipt.value = receipt
+  commentsLoading.value = true
+  commentError.value = ''
+  replyBody.value = ''
+  try {
+    const data = await apiFetch(`/receipts/${receipt.id}/comments/read`, { method: 'POST' })
+    comments.value = data.comments || []
+    await loadReceipts()
+  } catch (err) {
+    commentError.value = err.message
+  } finally {
+    commentsLoading.value = false
+  }
+}
+
+function closeComments() {
+  commentReceipt.value = null
+  comments.value = []
+  commentError.value = ''
+  replyBody.value = ''
+}
+
+async function replyToComment() {
+  if (!commentReceipt.value) return
+  replying.value = true
+  commentError.value = ''
+  try {
+    await apiFetch(`/receipts/${commentReceipt.value.id}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body: replyBody.value }),
+    })
+    replyBody.value = ''
+    const data = await apiFetch(`/receipts/${commentReceipt.value.id}/comments`)
+    comments.value = data.comments || []
+    await loadReceipts()
+  } catch (err) {
+    commentError.value = err.message
+  } finally {
+    replying.value = false
+  }
+}
+
 function linkStatus(link) {
   if (link.revoked_at) return 'Revoked'
   if (link.expires_at && new Date(link.expires_at) < new Date()) return 'Expired'
@@ -316,6 +416,11 @@ function linkStatus(link) {
 function formatDate(value) {
   if (!value) return ''
   return new Date(value).toLocaleDateString()
+}
+
+function formatDateTime(value) {
+  if (!value) return ''
+  return new Date(value).toLocaleString()
 }
 
 function softwareLabel(value) {
@@ -475,6 +580,14 @@ header {
   font-size: 0.92em;
   margin-top: 4px;
 }
+.activity {
+  color: var(--muted);
+  font-size: 0.9em;
+  margin-top: 8px;
+}
+.activity strong {
+  color: var(--text);
+}
 .link-form {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr auto;
@@ -520,6 +633,13 @@ button.danger {
   color: #fca5a5;
   font-size: 0.85em;
   padding: 6px 10px;
+}
+.comment-button {
+  font-size: 0.85em;
+  padding: 6px 10px;
+}
+.comment-button span {
+  color: #fca5a5;
 }
 .upload-panel {
   display: grid;
@@ -654,6 +774,81 @@ th {
 }
 .error {
   color: #fca5a5;
+}
+.comment-overlay {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.72);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 50;
+}
+.comment-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  max-height: min(720px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 20px;
+  width: min(680px, 100%);
+}
+.comment-panel header {
+  margin-bottom: 0;
+}
+.thread {
+  display: grid;
+  gap: 10px;
+}
+.comment {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.comment.bookkeeper {
+  border-color: var(--accent);
+}
+.comment div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.comment span {
+  color: var(--muted);
+  font-size: 0.8em;
+}
+.comment p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+}
+.comment-form {
+  display: grid;
+  gap: 10px;
+}
+.comment-form label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.78em;
+  gap: 5px;
+  text-transform: uppercase;
+}
+.comment-form textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font: inherit;
+  min-height: 110px;
+  padding: 10px;
+  resize: vertical;
+  text-transform: none;
 }
 @media (max-width: 640px) {
   header {

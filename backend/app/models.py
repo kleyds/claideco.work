@@ -55,6 +55,7 @@ class Receipt(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True, nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    upload_link_id: Mapped[Optional[int]] = mapped_column(ForeignKey("client_upload_links.id"), index=True, nullable=True)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     original_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -76,6 +77,31 @@ class Receipt(Base):
         back_populates="receipt",
         cascade="all, delete-orphan",
     )
+    comments: Mapped[list["ReceiptComment"]] = relationship(
+        back_populates="receipt",
+        cascade="all, delete-orphan",
+        order_by="ReceiptComment.created_at.asc()",
+    )
+
+    @property
+    def comment_count(self) -> int:
+        return len(self.comments)
+
+    @property
+    def unread_portal_comment_count(self) -> int:
+        return len(
+            [
+                comment
+                for comment in self.comments
+                if comment.author_type == "client" and not comment.is_read_by_bookkeeper
+            ]
+        )
+
+    @property
+    def latest_comment(self) -> Optional["ReceiptComment"]:
+        if not self.comments:
+            return None
+        return self.comments[-1]
 
 
 class ReceiptDataRecord(Base):
@@ -113,6 +139,24 @@ class LineItemRecord(Base):
     total: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     receipt: Mapped[Receipt] = relationship(back_populates="line_items")
+
+
+class ReceiptComment(Base):
+    __tablename__ = "receipt_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    receipt_id: Mapped[int] = mapped_column(ForeignKey("receipts.id"), index=True, nullable=False)
+    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    author_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    author_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_read_by_bookkeeper: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    receipt: Mapped[Receipt] = relationship(back_populates="comments")
+    client: Mapped[Client] = relationship()
+    owner: Mapped[User] = relationship()
 
 
 class BankTransaction(Base):

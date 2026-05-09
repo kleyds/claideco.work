@@ -40,6 +40,17 @@
 
       <main :class="['document-pane', { 'has-toolbar': canPreview(currentReceipt) }]">
         <div v-if="canPreview(currentReceipt)" class="document-toolbar">
+          <template v-if="isPdf(currentReceipt)">
+            <button type="button" :disabled="pdfPage <= 1" @click="changePdfPage(pdfPage - 1)">Prev</button>
+            <span class="page-count">Page {{ pdfPage }} / {{ pdfPageCount || '?' }}</span>
+            <button
+              type="button"
+              :disabled="pdfPageCount && pdfPage >= pdfPageCount"
+              @click="changePdfPage(pdfPage + 1)"
+            >
+              Next
+            </button>
+          </template>
           <button type="button" @click="zoom = Math.max(0.5, zoom - 0.1)">-</button>
           <span>{{ Math.round(zoom * 100) }}%</span>
           <button type="button" @click="zoom = Math.min(2, zoom + 0.1)">+</button>
@@ -168,7 +179,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { apiFetch, clearToken, loadAuthorizedObjectUrl } from '../api'
+import { apiFetch, apiFetchBlobWithHeaders, clearToken } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -181,6 +192,8 @@ const error = ref('')
 const zoom = ref(1)
 const reprocessing = ref(false)
 const previewObjectUrl = ref('')
+const pdfPage = ref(1)
+const pdfPageCount = ref(null)
 let previewRequestId = 0
 
 const form = reactive(emptyForm())
@@ -213,6 +226,8 @@ onUnmounted(() => {
 })
 
 watch(currentReceipt, (receipt) => {
+  pdfPage.value = 1
+  pdfPageCount.value = null
   loadPreview(receipt)
 })
 
@@ -266,6 +281,8 @@ function syncForm() {
 function selectReceipt(index) {
   currentIndex.value = index
   zoom.value = 1
+  pdfPage.value = 1
+  pdfPageCount.value = null
   syncForm()
 }
 
@@ -281,17 +298,29 @@ async function loadPreview(receipt) {
   if (!receipt || !canPreview(receipt)) return
   const requestId = ++previewRequestId
   try {
-    const url = await loadAuthorizedObjectUrl(`/receipts/${receipt.id}/preview`)
+    const pageQuery = isPdf(receipt) ? `?page=${pdfPage.value}` : ''
+    const { blob, headers } = await apiFetchBlobWithHeaders(`/receipts/${receipt.id}/preview${pageQuery}`)
+    const url = URL.createObjectURL(blob)
     if (requestId !== previewRequestId) {
       URL.revokeObjectURL(url)
       return
     }
+    const pageCount = Number(headers.get('X-PDF-Page-Count') || 0)
+    pdfPageCount.value = pageCount || null
     previewObjectUrl.value = url
   } catch (err) {
     if (requestId === previewRequestId) {
       error.value = err.message || 'Could not load preview'
     }
   }
+}
+
+async function changePdfPage(page) {
+  if (!currentReceipt.value || !isPdf(currentReceipt.value)) return
+  if (page < 1) return
+  if (pdfPageCount.value && page > pdfPageCount.value) return
+  pdfPage.value = page
+  await loadPreview(currentReceipt.value)
 }
 
 function isImage(receipt) {
@@ -500,6 +529,12 @@ function onKeydown(event) {
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
+}
+.page-count {
+  color: var(--text);
+  font-weight: 600;
+  min-width: 88px;
+  text-align: center;
 }
 button {
   border: 1px solid var(--border);

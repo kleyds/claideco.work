@@ -9,15 +9,20 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth import get_current_user
 from app.client_routes import _client_or_404
 from app.database import get_db
-from app.models import Client, ClientUploadLink, Receipt, User
+from app.email_service import send_portal_comment_notification, send_portal_upload_notification
+from app.models import Client, ClientUploadLink, Receipt, ReceiptComment, User
 from app.receipt_routes import ALLOWED_TYPES, _extension, process_receipt
 from app.schemas import (
     PortalInfoResponse,
+    ReceiptCommentCreateRequest,
+    ReceiptCommentPublic,
+    ReceiptCommentsResponse,
+    ReceiptsResponse,
     ReceiptUploadItem,
     ReceiptUploadResponse,
     UploadLinkCreateRequest,
@@ -51,6 +56,45 @@ def _ensure_link_usable(link: ClientUploadLink) -> None:
         raise HTTPException(410, "This upload link has expired")
     if link.max_uploads is not None and link.uploads_count >= link.max_uploads:
         raise HTTPException(429, "This upload link has reached its upload limit")
+
+
+def _clean_comment_body(body: str) -> str:
+    cleaned = body.strip()
+    if not cleaned:
+        raise HTTPException(422, "Comment cannot be blank")
+    if len(cleaned) > 2000:
+        raise HTTPException(422, "Comment is too long")
+    return cleaned
+
+
+def _clean_author_name(name: Optional[str]) -> str:
+    cleaned = (name or "").strip()
+    if not cleaned:
+        raise HTTPException(422, "Name is required")
+    if len(cleaned) > 255:
+        raise HTTPException(422, "Name is too long")
+    return cleaned
+
+
+def _portal_receipt_or_404(token: str, receipt_id: int, db: Session) -> tuple[ClientUploadLink, Client, Receipt]:
+    link = _link_or_404(token, db)
+    _ensure_link_usable(link)
+    client = db.scalar(select(Client).where(Client.id == link.client_id))
+    if not client or client.deleted_at is not None:
+        raise HTTPException(410, "This upload link is no longer active")
+    receipt = db.scalar(
+        select(Receipt)
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items), selectinload(Receipt.comments))
+        .where(
+            Receipt.id == receipt_id,
+            Receipt.client_id == link.client_id,
+            Receipt.user_id == link.user_id,
+            Receipt.upload_link_id == link.id,
+        )
+    )
+    if not receipt:
+        raise HTTPException(404, "Receipt not found")
+    return link, client, receipt
 
 
 @auth_router.post(
@@ -141,6 +185,79 @@ def portal_info(token: str, db: Session = Depends(get_db)):
     )
 
 
+@public_router.get("/{token}/receipts", response_model=ReceiptsResponse)
+def portal_receipts(token: str, db: Session = Depends(get_db)):
+    link = _link_or_404(token, db)
+    _ensure_link_usable(link)
+    client = db.scalar(select(Client).where(Client.id == link.client_id))
+    if not client or client.deleted_at is not None:
+        raise HTTPException(410, "This upload link is no longer active")
+    receipts = db.scalars(
+        select(Receipt)
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items), selectinload(Receipt.comments))
+        .where(
+            Receipt.client_id == link.client_id,
+            Receipt.user_id == link.user_id,
+            Receipt.upload_link_id == link.id,
+        )
+        .order_by(Receipt.created_at.desc())
+    ).all()
+    return ReceiptsResponse(receipts=receipts)
+
+
+@public_router.get("/{token}/receipts/{receipt_id}/comments", response_model=ReceiptCommentsResponse)
+def portal_receipt_comments(token: str, receipt_id: int, db: Session = Depends(get_db)):
+    _link, _client, receipt = _portal_receipt_or_404(token, receipt_id, db)
+    comments = db.scalars(
+        select(ReceiptComment)
+        .where(ReceiptComment.receipt_id == receipt.id, ReceiptComment.user_id == receipt.user_id)
+        .order_by(ReceiptComment.created_at.asc())
+    ).all()
+    return ReceiptCommentsResponse(comments=comments)
+
+
+@public_router.post(
+    "/{token}/receipts/{receipt_id}/comments",
+    response_model=ReceiptCommentPublic,
+    status_code=201,
+)
+def create_portal_receipt_comment(
+    token: str,
+    receipt_id: int,
+    payload: ReceiptCommentCreateRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    _link, client, receipt = _portal_receipt_or_404(token, receipt_id, db)
+    commenter_name = _clean_author_name(payload.author_name)
+    comment = ReceiptComment(
+        receipt_id=receipt.id,
+        client_id=receipt.client_id,
+        user_id=receipt.user_id,
+        author_type="client",
+        author_name=commenter_name,
+        body=_clean_comment_body(payload.body),
+        is_read_by_bookkeeper=False,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+
+    owner = db.get(User, receipt.user_id)
+    if owner:
+        background_tasks.add_task(
+            send_portal_comment_notification,
+            to_email=owner.email,
+            bookkeeper_name=owner.name,
+            client_name=client.name,
+            receipt_name=receipt.original_name or f"Receipt #{receipt.id}",
+            commenter_name=commenter_name,
+            comment_body=comment.body,
+            client_id=client.id,
+        )
+    return comment
+
+
 @public_router.post(
     "/{token}/upload",
     response_model=ReceiptUploadResponse,
@@ -188,6 +305,7 @@ async def portal_upload(
         receipt = Receipt(
             client_id=link.client_id,
             user_id=link.user_id,
+            upload_link_id=link.id,
             file_path=str(file_path),
             original_name=file.filename,
             mime_type=file.content_type,
@@ -203,6 +321,17 @@ async def portal_upload(
     for receipt in created:
         db.refresh(receipt)
         background_tasks.add_task(process_receipt, receipt.id)
+    owner = db.get(User, link.user_id)
+    if owner and created:
+        background_tasks.add_task(
+            send_portal_upload_notification,
+            to_email=owner.email,
+            bookkeeper_name=owner.name,
+            client_name=client.name,
+            link_label=link.label,
+            file_count=len(created),
+            client_id=client.id,
+        )
 
     return ReceiptUploadResponse(
         receipts=[

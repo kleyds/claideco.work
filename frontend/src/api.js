@@ -66,6 +66,27 @@ export async function apiFetchBlob(path, options = {}) {
   return res.blob()
 }
 
+export async function apiFetchBlobWithHeaders(path, options = {}) {
+  const headers = buildAuthHeaders(options.headers || {})
+  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
+  if (!res.ok) {
+    let detail = 'Request failed'
+    try {
+      const data = await res.json()
+      detail = data?.detail || detail
+    } catch (_err) {
+      // non-JSON body
+    }
+    const error = new Error(detail)
+    error.status = res.status
+    throw error
+  }
+  return {
+    blob: await res.blob(),
+    headers: res.headers,
+  }
+}
+
 export async function loadAuthorizedObjectUrl(path) {
   const blob = await apiFetchBlob(path)
   return URL.createObjectURL(blob)

@@ -38,6 +38,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-PDF-Page", "X-PDF-Page-Count"],
 )
 
 app.include_router(auth_router, prefix="/v1")

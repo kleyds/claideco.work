@@ -154,6 +154,20 @@
         <div class="detail-grid">
           <aside class="document-preview">
             <div v-if="canPreview(selectedReceipt)" class="preview-toolbar">
+              <template v-if="isPdf(selectedReceipt)">
+                <button type="button" class="secondary compact" :disabled="previewPage <= 1" @click="changePreviewPage(previewPage - 1)">
+                  Prev
+                </button>
+                <span class="page-count">Page {{ previewPage }} / {{ previewPageCount || '?' }}</span>
+                <button
+                  type="button"
+                  class="secondary compact"
+                  :disabled="previewPageCount && previewPage >= previewPageCount"
+                  @click="changePreviewPage(previewPage + 1)"
+                >
+                  Next
+                </button>
+              </template>
               <button type="button" class="secondary compact" @click="previewZoom = Math.max(0.5, previewZoom - 0.1)">
                 -
               </button>
@@ -265,7 +279,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { API_BASE_URL, apiFetch, clearToken, getToken, loadAuthorizedObjectUrl } from '../api'
+import { API_BASE_URL, apiFetch, apiFetchBlobWithHeaders, clearToken, getToken } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -278,6 +292,8 @@ const error = ref('')
 const exportFormat = ref('generic')
 const previewZoom = ref(1)
 const previewObjectUrl = ref('')
+const previewPage = ref(1)
+const previewPageCount = ref(null)
 let previewRequestId = 0
 const filters = reactive(defaultFilters())
 
@@ -306,6 +322,8 @@ onUnmounted(() => {
 
 watch(selectedReceipt, (receipt) => {
   document.body.style.overflow = receipt ? 'hidden' : ''
+  previewPage.value = 1
+  previewPageCount.value = null
   loadPreview(receipt)
 })
 
@@ -321,17 +339,29 @@ async function loadPreview(receipt) {
   if (!receipt || !canPreview(receipt)) return
   const requestId = ++previewRequestId
   try {
-    const url = await loadAuthorizedObjectUrl(`/receipts/${receipt.id}/preview`)
+    const pageQuery = isPdf(receipt) ? `?page=${previewPage.value}` : ''
+    const { blob, headers } = await apiFetchBlobWithHeaders(`/receipts/${receipt.id}/preview${pageQuery}`)
+    const url = URL.createObjectURL(blob)
     if (requestId !== previewRequestId) {
       URL.revokeObjectURL(url)
       return
     }
+    const pageCount = Number(headers.get('X-PDF-Page-Count') || 0)
+    previewPageCount.value = pageCount || null
     previewObjectUrl.value = url
   } catch (err) {
     if (requestId === previewRequestId) {
       handleError(err)
     }
   }
+}
+
+async function changePreviewPage(page) {
+  if (!selectedReceipt.value || !isPdf(selectedReceipt.value)) return
+  if (page < 1) return
+  if (previewPageCount.value && page > previewPageCount.value) return
+  previewPage.value = page
+  await loadPreview(selectedReceipt.value)
 }
 
 function defaultFilters() {
@@ -366,6 +396,8 @@ async function loadArchive() {
 async function openReceipt(receipt) {
   error.value = ''
   previewZoom.value = 1
+  previewPage.value = 1
+  previewPageCount.value = null
   try {
     selectedReceipt.value = await apiFetch(`/receipts/${receipt.id}`)
   } catch (err) {
@@ -717,6 +749,9 @@ tr.selected td {
   font-weight: 600;
   min-width: 48px;
   text-align: center;
+}
+.preview-toolbar .page-count {
+  min-width: 88px;
 }
 .preview-canvas {
   align-items: start;

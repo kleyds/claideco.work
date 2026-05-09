@@ -14,13 +14,16 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.auth import get_current_user
+from app.auth import get_current_user, user_from_token
 from app.database import SessionLocal, get_db
 from app.extract import extract_receipt
-from app.models import Client, LineItemRecord, Receipt, ReceiptDataRecord, User
+from app.models import Client, LineItemRecord, Receipt, ReceiptComment, ReceiptDataRecord, User
 from app.ocr import image_to_text, pdf_to_text
 from app.schemas import (
     ReceiptPatchRequest,
+    ReceiptCommentCreateRequest,
+    ReceiptCommentPublic,
+    ReceiptCommentsResponse,
     ReceiptPublic,
     ReceiptsResponse,
     ReceiptUploadItem,
@@ -53,7 +56,7 @@ def _client_or_404(client_id: int, user_id: int, db: Session) -> Client:
 def _receipt_or_404(receipt_id: int, user_id: int, db: Session) -> Receipt:
     receipt = db.scalar(
         select(Receipt)
-        .options(selectinload(Receipt.data), selectinload(Receipt.line_items))
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items), selectinload(Receipt.comments))
         .where(Receipt.id == receipt_id, Receipt.user_id == user_id)
     )
     if not receipt:
@@ -93,7 +96,7 @@ def _receipt_statement(
 ):
     statement = (
         select(Receipt)
-        .options(selectinload(Receipt.data), selectinload(Receipt.line_items))
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items), selectinload(Receipt.comments))
         .where(Receipt.client_id == client_id, Receipt.user_id == user_id)
     )
 
@@ -246,6 +249,15 @@ def _persist_blank_data(receipt: Receipt, error_message: str) -> None:
     receipt.data.confidence = None
     receipt.data.raw_json = {"extraction_error": error_message}
     receipt.line_items = []
+
+
+def _clean_comment_body(body: str) -> str:
+    cleaned = body.strip()
+    if not cleaned:
+        raise HTTPException(422, "Comment cannot be blank")
+    if len(cleaned) > 2000:
+        raise HTTPException(422, "Comment is too long")
+    return cleaned
 
 
 def process_receipt(receipt_id: int) -> None:
@@ -432,7 +444,7 @@ def review_queue(
     _client_or_404(client_id, current_user.id, db)
     receipts = db.scalars(
         select(Receipt)
-        .options(selectinload(Receipt.data), selectinload(Receipt.line_items))
+        .options(selectinload(Receipt.data), selectinload(Receipt.line_items), selectinload(Receipt.comments))
         .where(
             Receipt.client_id == client_id,
             Receipt.user_id == current_user.id,
@@ -450,6 +462,68 @@ def get_receipt(
     db: Session = Depends(get_db),
 ):
     return _receipt_or_404(receipt_id, current_user.id, db)
+
+
+@router.get("/receipts/{receipt_id}/comments", response_model=ReceiptCommentsResponse)
+def list_receipt_comments(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _receipt_or_404(receipt_id, current_user.id, db)
+    comments = db.scalars(
+        select(ReceiptComment)
+        .where(ReceiptComment.receipt_id == receipt_id, ReceiptComment.user_id == current_user.id)
+        .order_by(ReceiptComment.created_at.asc())
+    ).all()
+    return ReceiptCommentsResponse(comments=comments)
+
+
+@router.post("/receipts/{receipt_id}/comments", response_model=ReceiptCommentPublic, status_code=201)
+def create_receipt_comment(
+    receipt_id: int,
+    payload: ReceiptCommentCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    receipt = _receipt_or_404(receipt_id, current_user.id, db)
+    comment = ReceiptComment(
+        receipt_id=receipt.id,
+        client_id=receipt.client_id,
+        user_id=current_user.id,
+        author_type="bookkeeper",
+        author_name=current_user.name,
+        body=_clean_comment_body(payload.body),
+        is_read_by_bookkeeper=True,
+    )
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return comment
+
+
+@router.post("/receipts/{receipt_id}/comments/read", response_model=ReceiptCommentsResponse)
+def mark_receipt_comments_read(
+    receipt_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _receipt_or_404(receipt_id, current_user.id, db)
+    comments = db.scalars(
+        select(ReceiptComment)
+        .where(ReceiptComment.receipt_id == receipt_id, ReceiptComment.user_id == current_user.id)
+        .order_by(ReceiptComment.created_at.asc())
+    ).all()
+    changed = False
+    for comment in comments:
+        if comment.author_type == "client" and not comment.is_read_by_bookkeeper:
+            comment.is_read_by_bookkeeper = True
+            changed = True
+    if changed:
+        db.commit()
+        for comment in comments:
+            db.refresh(comment)
+    return ReceiptCommentsResponse(comments=comments)
 
 
 @router.post("/receipts/{receipt_id}/reprocess", response_model=ReceiptPublic)
@@ -504,7 +578,14 @@ def get_receipt_preview(
             if page > len(document):
                 raise HTTPException(404, "PDF page not found")
             pixmap = document.load_page(page - 1).get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-            return Response(content=pixmap.tobytes("png"), media_type="image/png")
+            return Response(
+                content=pixmap.tobytes("png"),
+                media_type="image/png",
+                headers={
+                    "X-PDF-Page": str(page),
+                    "X-PDF-Page-Count": str(len(document)),
+                },
+            )
     except HTTPException:
         raise
     except Exception as exc:

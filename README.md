@@ -28,9 +28,10 @@ PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It curren
 - Dashboard metrics for unprocessed invoices, unreconciled bank entries, and missing 2307s.
 - Bulk bank transaction categorization.
 - BIR compliance exports: SLSP, SAWT, 4-column journal, upcoming deadlines.
-- Client portal: tokenized public upload links, mobile-first upload page, expiry/limit/revoke controls.
+- Client portal: tokenized public upload links, mobile-first upload page, expiry/limit/revoke controls, receipt comments, and bookkeeper replies.
+- Portal notifications for new client uploads and portal comments via best-effort SMTP email.
 
-PDF files are stored, previewed in-app as rendered page images, and OCRed by rendering pages with PyMuPDF.
+PDF files are stored, previewed in-app as rendered page images with page navigation, and OCRed by rendering pages with PyMuPDF.
 
 ## Prerequisites
 
@@ -199,8 +200,11 @@ Receipts:
 - `GET /v1/receipts/{id}`
 - `POST /v1/receipts/{id}/reprocess`
 - `GET /v1/receipts/{id}/file` (Authorization header)
-- `GET /v1/receipts/{id}/preview` (Authorization header)
+- `GET /v1/receipts/{id}/preview?page=1` (Authorization header; PDFs return page-count headers)
 - `PATCH /v1/receipts/{id}`
+- `GET /v1/receipts/{id}/comments`
+- `POST /v1/receipts/{id}/comments`
+- `POST /v1/receipts/{id}/comments/read`
 
 Exports:
 
@@ -217,6 +221,9 @@ Client portal:
 - `DELETE /v1/clients/{id}/upload-links/{link_id}`
 - `GET /v1/portal/{token}` (public)
 - `POST /v1/portal/{token}/upload` (public)
+- `GET /v1/portal/{token}/receipts` (public)
+- `GET /v1/portal/{token}/receipts/{receipt_id}/comments` (public)
+- `POST /v1/portal/{token}/receipts/{receipt_id}/comments` (public)
 
 Bank/reconciliation:
 
@@ -241,5 +248,5 @@ Legacy endpoint:
 
 See `PESOBOOKS_HANDOFF.md` for the fuller handoff. High-priority next slices:
 
-- Client portal clarification/comments flow on top of existing public upload links.
+- Automated regression tests for reconciliation, 2307 tracking, PDF OCR, portal comments, and dashboard metrics.
 - Docker deployment setup.

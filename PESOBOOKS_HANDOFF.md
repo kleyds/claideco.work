@@ -8,6 +8,7 @@ Stack:
 - Database: PostgreSQL (psycopg2-binary). SQLite still works for ad-hoc local testing because models use portable types, but production assumes Postgres
 - Auth: JWT + bcrypt with mandatory email verification
 - Email: SMTP via `app/email_service.py`; falls back to logging the verification link when `SMTP_HOST` is unset
+- Portal notifications: best-effort SMTP email for new portal uploads and client comments; failures are logged and do not block uploads/comments
 - File storage: local disk under `backend/uploads/`
 - Migrations: Alembic (`backend/alembic/`); pre-Alembic databases are auto-stamped to head on startup with column backfills first
 
@@ -83,6 +84,7 @@ Stack:
 - Review page uses a fixed-height workbench layout on desktop
 - Queue, document/PDF preview, and extracted-field panes scroll independently with scroll chaining contained
 - PDF receipts preview as app-rendered page images so the native browser PDF download toolbar is not shown; image receipts keep app-level zoom controls
+- Multi-page PDFs expose page navigation in the review preview using the protected preview endpoint's page-count headers
 - Document previews are anchored to the top center so zoomed-out PDFs do not float below blank space
 - Review queue cards clamp long file names so PDF names do not overflow the sidebar
 - Empty review queue shows an "You're all caught up" state with upload/archive actions
@@ -100,12 +102,36 @@ Stack:
   - formats: `generic`, `qbo`, `xero`
 - Archive read-only detail modal:
   - app-rendered image/PDF preview
+  - PDF page navigation
   - zoom controls
   - fixed popup header with internal detail scrolling
   - extracted BIR fields
   - line items
   - raw OCR text
 - Protected receipt previews are served through app-rendered image/PDF page previews; 2307 file responses are served inline for browser preview
+
+### Client Portal
+- `ClientUploadLink` model with token, optional label, expires_at, max_uploads, uploads_count, revoked_at, last_used_at
+- `ReceiptComment` model for receipt-level clarification threads
+- Receipts uploaded through a portal link store `upload_link_id` so public portal receipt/comment access is token-scoped
+- Auth admin APIs:
+  - `POST /v1/clients/{id}/upload-links`
+  - `GET /v1/clients/{id}/upload-links`
+  - `DELETE /v1/clients/{id}/upload-links/{link_id}`
+- Public APIs (no auth, token-scoped):
+  - `GET /v1/portal/{token}` — returns client name, label, remaining uploads, expiry
+  - `POST /v1/portal/{token}/upload` — accepts JPEG/PNG/WebP/PDF, queues for OCR
+  - `GET /v1/portal/{token}/receipts`
+  - `GET /v1/portal/{token}/receipts/{receipt_id}/comments`
+  - `POST /v1/portal/{token}/receipts/{receipt_id}/comments`
+- Authenticated bookkeeper comment APIs:
+  - `GET /v1/receipts/{receipt_id}/comments`
+  - `POST /v1/receipts/{receipt_id}/comments`
+  - `POST /v1/receipts/{receipt_id}/comments/read`
+- Client detail page exposes link create/copy/revoke, unread portal comment counts, and a comment/reply modal
+- `/portal/:token` is now a compact dashboard with upload first, uploaded receipts below, and receipt comment threads
+- Public route renders without app navigation chrome (`meta.publicChrome`)
+- New portal uploads and client comments send best-effort email notifications to the owning bookkeeper
 
 ### Bank Reconciliation
 - Models:
@@ -181,7 +207,7 @@ Backend:
 - `backend/app/extract.py`
 - `backend/app/ocr.py`
 - `backend/alembic/env.py`
-- `backend/alembic/versions/` (`5c15a1fe35aa` baseline, `c6cda2519628` upload links, `e864ea5fcdb6` user verification)
+- `backend/alembic/versions/` (`5c15a1fe35aa` baseline, `c6cda2519628` upload links, `e864ea5fcdb6` user verification, `f43a9d2b7c10` receipt comments)
 
 Frontend:
 - `frontend/src/api.js`
@@ -203,20 +229,7 @@ Frontend:
 
 High priority:
 - PostgreSQL production validation
-- Automated regression tests for reconciliation, 2307 tracking, PDF OCR, and dashboard metrics
-
-### Client Portal
-- `ClientUploadLink` model with token, optional label, expires_at, max_uploads, uploads_count, revoked_at, last_used_at
-- Auth admin APIs:
-  - `POST /v1/clients/{id}/upload-links`
-  - `GET /v1/clients/{id}/upload-links`
-  - `DELETE /v1/clients/{id}/upload-links/{link_id}`
-- Public APIs (no auth, token-scoped):
-  - `GET /v1/portal/{token}` — returns client name, label, remaining uploads, expiry
-  - `POST /v1/portal/{token}/upload` — accepts JPEG/PNG/WebP/PDF, queues for OCR
-- Client detail page exposes link create/copy/revoke; revoked/expired/exhausted are surfaced in the table
-- `/portal/:token` mobile-first upload page with `capture="environment"` for direct camera input on phones
-- Public route renders without app navigation chrome (`meta.publicChrome`)
+- Automated regression tests for reconciliation, 2307 tracking, PDF OCR, portal comments, and dashboard metrics
 
 ### BIR Compliance
 - `GET /v1/clients/{id}/exports/slsp?quarter=YYYY-Qn` — Summary List of Purchases CSV grouped by supplier TIN
@@ -227,21 +240,23 @@ High priority:
 
 ## Recommended Next Product Slices
 
-1. Client portal — clarification/messaging
-   - Comments/questions on individual receipts visible in the portal
-   - Notify bookkeeper of new portal uploads (email or in-app)
-
-2. Billing/limits
+1. Billing/limits
    - Receipt limits per plan
    - Paymongo integration
    - Billing status/settings page
 
-3. Deployment
+2. Deployment
    - Dockerfile/backend
    - Dockerfile/frontend or static build
    - docker-compose with DB
    - environment docs
    - production CORS/secret handling
+
+3. Regression test suite
+   - Reconciliation matching and 2307 tracking
+   - PDF OCR and multi-page preview
+   - Portal comments and notification paths
+   - Dashboard metrics
 
 ## Current Test Commands
 
