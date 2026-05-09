@@ -5,7 +5,7 @@
 Stack:
 - Frontend: Vue 3 + Vite, running on `http://127.0.0.1:5174`
 - Backend: FastAPI + SQLAlchemy, running on `http://127.0.0.1:8001`
-- Local DB fallback: SQLite via `DATABASE_URL`, MySQL-compatible SQLAlchemy setup
+- Local DB fallback: SQLite via `DATABASE_URL`, PostgreSQL-compatible SQLAlchemy setup (psycopg 3)
 - Auth: JWT + bcrypt
 - File storage: local disk under `backend/uploads/`
 
@@ -146,7 +146,7 @@ Stack:
   - received timestamp
   - attachment upload timestamp
   - follow-up notes
-- Lightweight startup schema upgrade adds 2307 columns to existing `reconciliations` tables until Alembic exists
+- Alembic manages schema; pre-Alembic databases are auto-stamped to head on startup, with the legacy 2307-column patch applied first to backfill any gap
 - 2307 follow-up APIs:
   - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true`
   - `GET /v1/clients/{id}/bank/reconciliations?requires_2307=true&form_2307_status=requested`
@@ -187,28 +187,41 @@ Frontend:
 ## Known Gaps / Needs Completion
 
 High priority:
-- Better migrations: currently using `Base.metadata.create_all`, no Alembic
-- MySQL production validation
+- PostgreSQL production validation
 - Automated regression tests for reconciliation, 2307 tracking, PDF OCR, and dashboard metrics
+
+### Client Portal
+- `ClientUploadLink` model with token, optional label, expires_at, max_uploads, uploads_count, revoked_at, last_used_at
+- Auth admin APIs:
+  - `POST /v1/clients/{id}/upload-links`
+  - `GET /v1/clients/{id}/upload-links`
+  - `DELETE /v1/clients/{id}/upload-links/{link_id}`
+- Public APIs (no auth, token-scoped):
+  - `GET /v1/portal/{token}` — returns client name, label, remaining uploads, expiry
+  - `POST /v1/portal/{token}/upload` — accepts JPEG/PNG/WebP/PDF, queues for OCR
+- Client detail page exposes link create/copy/revoke; revoked/expired/exhausted are surfaced in the table
+- `/portal/:token` mobile-first upload page with `capture="environment"` for direct camera input on phones
+- Public route renders without app navigation chrome (`meta.publicChrome`)
+
+### BIR Compliance
+- `GET /v1/clients/{id}/exports/slsp?quarter=YYYY-Qn` — Summary List of Purchases CSV grouped by supplier TIN
+- `GET /v1/clients/{id}/exports/sawt?quarter=YYYY-Qn` — Summary Alphalist of Withholding Taxes CSV from 2307-flagged reconciliations
+- `GET /v1/clients/{id}/exports/journal?month=YYYY-MM` — 4-column journal CSV with input VAT split when present
+- `GET /v1/clients/{id}/compliance/deadlines` — Static schedule of monthly/quarterly BIR forms in the next 120 days
+- `/app/clients/:id/compliance` page surfaces the four exports and a deadline table
 
 ## Recommended Next Product Slices
 
-1. Compliance exports
-   - SLSP/SAWT export
-   - 4-column journal export
-   - BIR deadline flags
+1. Client portal — clarification/messaging
+   - Comments/questions on individual receipts visible in the portal
+   - Notify bookkeeper of new portal uploads (email or in-app)
 
-2. Client portal
-   - Public upload links
-   - Query/clarification flow
-   - Mobile-first upload page
-
-3. Billing/limits
+2. Billing/limits
    - Receipt limits per plan
    - Paymongo integration
    - Billing status/settings page
 
-4. Deployment
+3. Deployment
    - Dockerfile/backend
    - Dockerfile/frontend or static build
    - docker-compose with DB

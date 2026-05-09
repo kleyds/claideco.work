@@ -46,7 +46,7 @@
       <ul>
         <li><strong>Python + FastAPI</strong> for backend APIs.</li>
         <li><strong>Vue 3 + Vite</strong> for product UIs and this site.</li>
-        <li><strong>MySQL</strong> for persistence.</li>
+        <li><strong>PostgreSQL</strong> for persistence.</li>
         <li><strong>OpenAI</strong> and other models, called from our backend &mdash; never from the browser.</li>
       </ul>
     </section>

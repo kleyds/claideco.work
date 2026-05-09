@@ -1,5 +1,6 @@
 <template>
-  <div :class="['layout', { 'review-layout': isReviewRoute }]">
+  <router-view v-if="isPublicChrome" />
+  <div v-else :class="['layout', { 'review-layout': isReviewRoute }]">
     <Nav />
     <main :class="{ 'review-main': isReviewRoute }">
       <router-view />
@@ -19,6 +20,7 @@ import Nav from './components/Nav.vue'
 
 const route = useRoute()
 const isReviewRoute = computed(() => route.name === 'client-review')
+const isPublicChrome = computed(() => route.meta?.publicChrome === true)
 </script>
 
 <style scoped>

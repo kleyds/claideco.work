@@ -15,6 +15,8 @@ import ClientDetail from './views/ClientDetail.vue'
 import ClientReview from './views/ClientReview.vue'
 import ClientArchive from './views/ClientArchive.vue'
 import ClientReconciliation from './views/ClientReconciliation.vue'
+import ClientCompliance from './views/ClientCompliance.vue'
+import ClientPortalUpload from './views/ClientPortalUpload.vue'
 import ComingSoon from './views/ComingSoon.vue'
 import { getToken } from './api'
 import './style.css'
@@ -36,6 +38,8 @@ const router = createRouter({
     { path: '/app/clients/:id/review', name: 'client-review', component: ClientReview, meta: { requiresAuth: true } },
     { path: '/app/clients/:id/archive', name: 'client-archive', component: ClientArchive, meta: { requiresAuth: true } },
     { path: '/app/clients/:id/reconciliation', name: 'client-reconciliation', component: ClientReconciliation, meta: { requiresAuth: true } },
+    { path: '/app/clients/:id/compliance', name: 'client-compliance', component: ClientCompliance, meta: { requiresAuth: true } },
+    { path: '/portal/:token', name: 'portal-upload', component: ClientPortalUpload, meta: { publicChrome: true } },
   ],
   scrollBehavior(to) {
     if (to.hash) return { el: to.hash, behavior: 'smooth' }

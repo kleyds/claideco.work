@@ -27,6 +27,8 @@ PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It curren
 - Form 2307 status tracking and attachment workflow.
 - Dashboard metrics for unprocessed invoices, unreconciled bank entries, and missing 2307s.
 - Bulk bank transaction categorization.
+- BIR compliance exports: SLSP, SAWT, 4-column journal, upcoming deadlines.
+- Client portal: tokenized public upload links, mobile-first upload page, expiry/limit/revoke controls.
 
 PDF files are stored, previewed in-app as rendered page images, and OCRed by rendering pages with PyMuPDF.
 
@@ -88,10 +90,27 @@ SMTP_USE_TLS=true
 FRONTEND_BASE_URL=http://localhost:5174
 ```
 
-> SQLite is no longer supported. Provision PostgreSQL before starting the backend.
+> PostgreSQL is required. The backend uses `psycopg2-binary`; provision Postgres
+> before starting the backend and set `DATABASE_URL` accordingly:
+>
+> ```text
+> DATABASE_URL=postgresql+psycopg2://user:pass@localhost:5432/pesobooks
+> ```
 
 > If `SMTP_HOST` is unset, registration still succeeds and the verification link is
 > printed to the backend log so you can verify accounts during local development.
+
+Run database migrations (also runs automatically on app startup):
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+To create a new migration after editing `app/models.py`:
+
+```powershell
+.\.venv\Scripts\python.exe -m alembic revision --autogenerate -m "describe change"
+```
 
 Run the backend:
 
@@ -134,6 +153,8 @@ Key routes:
 - `/app/clients/:id/review`
 - `/app/clients/:id/archive`
 - `/app/clients/:id/reconciliation`
+- `/app/clients/:id/compliance`
+- `/portal/:token` (public client upload page)
 
 ## Verification
 
@@ -184,6 +205,18 @@ Receipts:
 Exports:
 
 - `GET /v1/clients/{id}/export?format=generic|qbo|xero`
+- `GET /v1/clients/{id}/exports/slsp?quarter=YYYY-Qn`
+- `GET /v1/clients/{id}/exports/sawt?quarter=YYYY-Qn`
+- `GET /v1/clients/{id}/exports/journal?month=YYYY-MM`
+- `GET /v1/clients/{id}/compliance/deadlines`
+
+Client portal:
+
+- `POST /v1/clients/{id}/upload-links`
+- `GET /v1/clients/{id}/upload-links`
+- `DELETE /v1/clients/{id}/upload-links/{link_id}`
+- `GET /v1/portal/{token}` (public)
+- `POST /v1/portal/{token}/upload` (public)
 
 Bank/reconciliation:
 
@@ -208,7 +241,5 @@ Legacy endpoint:
 
 See `PESOBOOKS_HANDOFF.md` for the fuller handoff. High-priority next slices:
 
-- Alembic migrations.
-- Compliance exports: SLSP, SAWT, and 4-column journal.
-- Client portal upload links and clarification flow.
+- Client portal clarification/comments flow on top of existing public upload links.
 - Docker deployment setup.
