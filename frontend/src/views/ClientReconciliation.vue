@@ -10,8 +10,16 @@
 
     <section class="import-panel">
       <div>
-        <h2>Import bank CSV</h2>
-        <p>Supports common Date, Description, Amount, Debit/Credit, and Reference columns from PH bank exports.</p>
+        <p class="eyebrow">Bank feed</p>
+        <h2
+          class="title-row hover-tooltip"
+          tabindex="0"
+          aria-label="Import bank CSV. Supports common Date, Description, Amount, Debit/Credit, and Reference columns from PH bank exports."
+          data-tooltip="Supports common Date, Description, Amount, Debit/Credit, and Reference columns from PH bank exports."
+        >
+          Import CSV
+          <span class="info-tooltip" aria-hidden="true">?</span>
+        </h2>
       </div>
       <form @submit.prevent="importCsv">
         <select v-model="bankTemplate" aria-label="Bank CSV template">
@@ -20,7 +28,11 @@
           </option>
         </select>
         <input v-model="bankName" type="text" placeholder="Bank name, e.g. BPI" />
-        <input ref="fileInput" type="file" accept=".csv,text/csv" @change="onFileChange" />
+        <label :class="['file-picker', { selected: selectedFile }]">
+          <input ref="fileInput" type="file" accept=".csv,text/csv" @change="onFileChange" />
+          <span>Choose CSV</span>
+          <strong>{{ filePickerLabel }}</strong>
+        </label>
         <button type="submit" :disabled="uploading || !selectedFile">
           {{ uploading ? 'Importing...' : 'Import CSV' }}
         </button>
@@ -40,7 +52,10 @@
 
     <section class="transaction-list">
       <div class="section-head">
-        <h2>Unreconciled bank entries</h2>
+        <div>
+          <p class="eyebrow">Open items</p>
+          <h2>Unreconciled bank entries</h2>
+        </div>
         <div class="toolbar">
           <input v-model="bulkCategory" type="text" placeholder="Category / CoA code" />
           <button type="button" :disabled="selectedTransactions.length === 0 || !bulkCategory" @click="applyCategory">
@@ -133,8 +148,16 @@
     <section class="reconciled-panel">
       <div class="section-head">
         <div>
-          <h2>Reconciled transactions</h2>
-          <p>Matched bank entries and their approved receipts.</p>
+          <p class="eyebrow">Matched</p>
+          <h2
+            class="title-row hover-tooltip"
+            tabindex="0"
+            aria-label="Reconciled transactions. Matched bank entries and their approved receipts."
+            data-tooltip="Matched bank entries and their approved receipts."
+          >
+            Reconciled transactions
+            <span class="info-tooltip" aria-hidden="true">?</span>
+          </h2>
         </div>
         <button type="button" @click="loadReconciledItems">Refresh</button>
       </div>
@@ -170,8 +193,16 @@
     <section class="form-2307-panel">
       <div class="section-head">
         <div>
-          <h2>Form 2307 follow-up</h2>
-          <p>Withholding variance matches that need certificates.</p>
+          <p class="eyebrow">Certificates</p>
+          <h2
+            class="title-row hover-tooltip"
+            tabindex="0"
+            aria-label="Form 2307 follow-up. Withholding variance matches that need certificates."
+            data-tooltip="Withholding variance matches that need certificates."
+          >
+            Form 2307 follow-up
+            <span class="info-tooltip" aria-hidden="true">?</span>
+          </h2>
         </div>
         <div class="toolbar">
           <select v-model="form2307StatusFilter" aria-label="Form 2307 status filter" @change="loadForm2307Items">
@@ -270,7 +301,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiFetch, apiFetchBlob, clearToken } from '../api'
 
@@ -311,6 +342,7 @@ const bankTemplates = [
   { value: 'metrobank', label: 'Metrobank' },
   { value: 'unionbank', label: 'UnionBank' },
 ]
+const filePickerLabel = computed(() => selectedFile.value?.name || 'No file selected')
 
 onMounted(async () => {
   try {
@@ -651,27 +683,171 @@ header {
   margin-bottom: 24px;
 }
 .eyebrow {
-  color: var(--accent-hover);
+  color: var(--workflow-eyebrow);
   font-size: 0.78em;
   font-weight: 700;
+  letter-spacing: 0;
   margin-bottom: 4px;
   text-transform: uppercase;
+}
+.title-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+.hover-tooltip {
+  cursor: help;
+  position: relative;
+}
+.hover-tooltip::after {
+  background: #111827;
+  border: 1px solid var(--workflow-line);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  color: var(--workflow-text);
+  content: attr(data-tooltip);
+  font-size: 0.78rem;
+  font-weight: 500;
+  left: 50%;
+  line-height: 1.45;
+  max-width: min(320px, calc(100vw - 48px));
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  text-transform: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  visibility: hidden;
+  width: max-content;
+  z-index: 20;
+}
+.hover-tooltip:hover::after,
+.hover-tooltip:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+.hover-tooltip:focus-visible {
+  outline: 2px solid var(--workflow-accent-2);
+  outline-offset: 4px;
+}
+.info-tooltip {
+  align-items: center;
+  background: rgba(124, 58, 237, 0.14);
+  border: 1px solid rgba(167, 139, 250, 0.32);
+  border-radius: 999px;
+  color: #c4b5fd;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 800;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+.hover-tooltip:hover .info-tooltip,
+.hover-tooltip:focus-visible .info-tooltip {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(45, 212, 191, 0.48);
+  color: #99f6e4;
 }
 .import-panel,
 .transaction-list,
 .matches,
 .reconciled-panel,
 .form-2307-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--workflow-panel-strong), var(--workflow-panel));
+  border: 1px solid var(--workflow-line);
+  border-radius: 10px;
+  box-shadow: var(--workflow-panel-shadow);
   padding: 20px;
 }
 .import-panel {
+  align-items: center;
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 20px;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  gap: 28px;
   margin-bottom: 20px;
+  min-height: 92px;
+  overflow: hidden;
+}
+.import-panel h2,
+.transaction-list h2,
+.matches h2,
+.reconciled-panel h2,
+.form-2307-panel h2 {
+  font-size: 1.08em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.import-panel form {
+  display: grid;
+  grid-template-columns: minmax(126px, 150px) minmax(150px, 1fr) minmax(210px, 1.35fr) minmax(112px, 116px);
+  gap: 10px;
+  justify-content: stretch;
+  min-width: 0;
+  width: 100%;
+}
+.import-panel form > * {
+  min-width: 0;
+}
+.import-panel input,
+.import-panel select,
+.import-panel button {
+  min-height: 48px;
+}
+.import-panel button {
+  min-width: 0;
+  padding-inline: 12px;
+  white-space: nowrap;
+  width: 100%;
+}
+.file-picker {
+  align-items: center;
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-line);
+  border-radius: 8px;
+  color: var(--workflow-muted);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 48px;
+  min-width: 0;
+  padding: 6px;
+}
+.file-picker:hover,
+.file-picker.selected {
+  border-color: rgba(20, 184, 166, 0.7);
+}
+.file-picker input {
+  display: none;
+}
+.file-picker span {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--workflow-soft-line);
+  border-radius: 6px;
+  color: var(--workflow-text);
+  cursor: pointer;
+  font-size: 0.92em;
+  font-weight: 600;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.file-picker strong {
+  color: var(--workflow-muted);
+  font-size: 0.9em;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-picker.selected strong {
+  color: var(--workflow-text);
 }
 .import-panel p,
 .empty,
@@ -681,7 +857,14 @@ header {
 .manual-match p,
 .section-head span,
 .reasons {
-  color: var(--muted);
+  color: var(--workflow-muted);
+}
+.import-panel .eyebrow,
+.transaction-list .section-head .eyebrow,
+.reconciled-panel .section-head .eyebrow,
+.form-2307-panel .section-head .eyebrow {
+  color: var(--workflow-eyebrow);
+  margin-top: 0;
 }
 form,
 .toolbar {
@@ -694,26 +877,34 @@ form,
 input,
 select,
 textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-line);
   border-radius: 8px;
-  color: var(--text);
+  color: var(--workflow-text);
   font: inherit;
   padding: 10px 12px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-color: var(--workflow-accent-2);
 }
 textarea {
   min-width: 240px;
   resize: vertical;
 }
 button {
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  background: linear-gradient(135deg, var(--workflow-accent), #5b5df6);
+  border: 1px solid transparent;
   border-radius: 8px;
   color: white;
   cursor: pointer;
   font: inherit;
   font-weight: 600;
   padding: 10px 14px;
+}
+button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
 button:disabled {
   cursor: wait;
@@ -724,15 +915,15 @@ button:disabled {
   grid-column: 1 / -1;
 }
 .import-summary {
-  color: var(--muted);
+  color: var(--workflow-muted);
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   grid-column: 1 / -1;
 }
 .import-summary span {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-soft-line);
   border-radius: 999px;
   padding: 4px 9px;
 }
@@ -752,9 +943,15 @@ button:disabled {
 .section-head button,
 .transaction button,
 .reconciled-actions button {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: var(--workflow-line);
+  color: var(--workflow-text);
+}
+.section-head button:hover:not(:disabled),
+.transaction button:hover:not(:disabled),
+.reconciled-actions button:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(167, 139, 250, 0.52);
 }
 .rows {
   display: grid;
@@ -765,13 +962,26 @@ button:disabled {
 .reconciled-card,
 .form-2307-card {
   align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-soft-line);
   border-radius: 8px;
   display: grid;
   gap: 16px;
   grid-template-columns: auto 1fr auto auto;
   padding: 14px;
+}
+.transaction h3,
+.match-card h3,
+.reconciled-card h3,
+.form-2307-card h3 {
+  font-size: 1em;
+  font-weight: 700;
+}
+.transaction:hover,
+.match-card:hover,
+.reconciled-card:hover,
+.form-2307-card:hover {
+  border-color: rgba(147, 197, 253, 0.28);
 }
 .select-row {
   display: grid;
@@ -782,7 +992,7 @@ button:disabled {
   width: 18px;
 }
 .tx-main span {
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.82em;
 }
 .tx-amount {
@@ -790,7 +1000,7 @@ button:disabled {
   justify-items: end;
 }
 .tx-amount span {
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.82em;
 }
 .matches {
@@ -798,7 +1008,7 @@ button:disabled {
 }
 .manual-match {
   align-items: end;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--workflow-line);
   display: grid;
   gap: 14px;
   grid-template-columns: 1fr auto;
@@ -818,7 +1028,7 @@ button:disabled {
   margin-top: 20px;
 }
 .reconciled-panel .section-head p {
-  color: var(--muted);
+  color: var(--workflow-muted);
   margin-top: 4px;
 }
 .reconciled-rows {
@@ -829,7 +1039,7 @@ button:disabled {
   grid-template-columns: 1fr auto auto;
 }
 .reconciled-main span {
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.82em;
 }
 .reconciled-actions {
@@ -841,7 +1051,7 @@ button:disabled {
   margin-top: 20px;
 }
 .form-2307-panel .section-head p {
-  color: var(--muted);
+  color: var(--workflow-muted);
   margin-top: 4px;
 }
 .form-2307-rows {
@@ -853,7 +1063,7 @@ button:disabled {
   grid-template-columns: minmax(260px, 1fr) auto minmax(220px, auto) minmax(260px, 0.8fr);
 }
 .form-2307-main span {
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.82em;
 }
 .form-2307-status,
@@ -873,15 +1083,15 @@ button:disabled {
   gap: 8px;
 }
 .form-2307-timeline dt {
-  color: var(--muted);
+  color: var(--workflow-muted);
   min-width: 76px;
 }
 .form-2307-timeline dd {
-  color: var(--text);
+  color: var(--workflow-text);
 }
 .form-2307-upload a,
 .form-2307-upload .link-button {
-  color: var(--accent-hover);
+  color: var(--workflow-eyebrow);
   font-size: 0.9em;
   text-align: right;
 }
@@ -897,9 +1107,10 @@ button:disabled {
   width: 100%;
 }
 .status-pill {
-  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--workflow-soft-line);
   border-radius: 999px;
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.78em;
   font-weight: 700;
   padding: 4px 9px;
@@ -927,7 +1138,7 @@ button:disabled {
   justify-items: end;
 }
 .match-score strong {
-  color: var(--accent-hover);
+  color: var(--workflow-eyebrow);
 }
 .match-score span {
   color: #fde68a;
@@ -958,8 +1169,30 @@ button:disabled {
     justify-content: flex-start;
     justify-items: start;
   }
+  .import-panel form {
+    grid-template-columns: 1fr;
+  }
   .form-2307-notes textarea {
     min-width: 0;
+  }
+}
+@media (max-width: 980px) {
+  .import-panel {
+    grid-template-columns: 1fr;
+  }
+  .import-panel form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .import-panel button {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 560px) {
+  .import-panel form {
+    grid-template-columns: 1fr;
+  }
+  .import-panel button {
+    grid-column: auto;
   }
 }
 </style>

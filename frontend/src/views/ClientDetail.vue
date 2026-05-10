@@ -5,7 +5,7 @@
         <p class="eyebrow">Client</p>
         <h1>{{ client?.name || 'Loading...' }}</h1>
       </div>
-      <router-link to="/app">Back to clients</router-link>
+      <button type="button" class="header-link" @click="showWorkspaceConfirm = true">Back to workspace</button>
     </header>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -247,6 +247,24 @@
         <p v-if="commentError" class="error">{{ commentError }}</p>
       </div>
     </section>
+
+    <section
+      v-if="showWorkspaceConfirm"
+      class="confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="workspace-confirm-title"
+    >
+      <div class="confirm-panel">
+        <p class="eyebrow">Workspace</p>
+        <h2 id="workspace-confirm-title">Go back to workspace?</h2>
+        <p>You will leave this client homepage and return to the workspace list.</p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-yes" @click="goToWorkspace">Yes</button>
+          <button type="button" class="secondary" @click="showWorkspaceConfirm = false">No</button>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -284,6 +302,7 @@ const commentsLoading = ref(false)
 const commentError = ref('')
 const replyBody = ref('')
 const replying = ref(false)
+const showWorkspaceConfirm = ref(false)
 
 onMounted(async () => {
   try {
@@ -420,6 +439,11 @@ function closeComments() {
   comments.value = []
   commentError.value = ''
   replyBody.value = ''
+}
+
+function goToWorkspace() {
+  showWorkspaceConfirm.value = false
+  router.push('/app')
 }
 
 async function replyToComment() {
@@ -907,6 +931,17 @@ button {
   font: inherit;
   padding: 10px 14px;
 }
+.header-link {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent);
+  padding: 0;
+}
+.header-link:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent-hover);
+}
 button[type="submit"] {
   background: linear-gradient(135deg, var(--detail-accent), #5b5df6);
   border-color: transparent;
@@ -992,6 +1027,50 @@ tbody tr:hover {
   right: 0;
   top: 0;
   z-index: 50;
+}
+.confirm-overlay {
+  align-items: center;
+  background: rgba(2, 6, 23, 0.72);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 24px;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 60;
+}
+.confirm-panel {
+  background: var(--detail-panel);
+  border: 1px solid var(--detail-line);
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  width: min(420px, 100%);
+}
+.confirm-panel h2 {
+  font-size: 1.12em;
+}
+.confirm-panel p:not(.eyebrow) {
+  color: var(--detail-muted);
+}
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.confirm-yes {
+  background: linear-gradient(135deg, var(--detail-accent), #5b5df6);
+  border-color: transparent;
+  color: white;
+  font-weight: 600;
+}
+.confirm-yes:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
 .comment-panel {
   background: var(--detail-panel);

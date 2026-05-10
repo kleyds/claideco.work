@@ -421,9 +421,10 @@ function onKeydown(event) {
   font-size: 1.55em;
 }
 .eyebrow {
-  color: var(--accent-hover);
+  color: var(--workflow-eyebrow);
   font-size: 0.78em;
   font-weight: 700;
+  letter-spacing: 0;
   margin-bottom: 2px;
   text-transform: uppercase;
 }
@@ -431,7 +432,7 @@ function onKeydown(event) {
   display: flex;
   gap: 16px;
   align-items: center;
-  color: var(--muted);
+  color: var(--workflow-muted);
 }
 .review-shell {
   display: grid;
@@ -446,9 +447,10 @@ function onKeydown(event) {
 .document-pane,
 .fields-pane,
 .empty {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--workflow-panel-strong), var(--workflow-panel));
+  border: 1px solid var(--workflow-line);
+  border-radius: 10px;
+  box-shadow: var(--workflow-panel-shadow);
 }
 .queue-list {
   display: grid;
@@ -459,10 +461,10 @@ function onKeydown(event) {
   padding: 12px;
 }
 .queue-list button {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-soft-line);
   border-radius: 8px;
-  color: var(--text);
+  color: var(--workflow-text);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -482,7 +484,11 @@ function onKeydown(event) {
   text-overflow: ellipsis;
 }
 .queue-list button.active {
-  border-color: var(--accent);
+  background: rgba(124, 58, 237, 0.16);
+  border-color: rgba(167, 139, 250, 0.42);
+}
+.queue-list button:hover {
+  border-color: rgba(147, 197, 253, 0.28);
 }
 .status,
 .confidence {
@@ -511,8 +517,8 @@ function onKeydown(event) {
   color: #fca5a5;
 }
 .confidence.unknown {
-  background: var(--surface-2);
-  color: var(--muted);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--workflow-muted);
 }
 .document-pane {
   display: grid;
@@ -524,26 +530,30 @@ function onKeydown(event) {
   grid-template-rows: auto minmax(0, 1fr);
 }
 .document-toolbar {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--workflow-line);
   display: flex;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
 }
 .page-count {
-  color: var(--text);
+  color: var(--workflow-text);
   font-weight: 600;
   min-width: 88px;
   text-align: center;
 }
 button {
-  border: 1px solid var(--border);
+  border: 1px solid var(--workflow-line);
   border-radius: 8px;
-  background: var(--surface-2);
-  color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--workflow-text);
   cursor: pointer;
   font: inherit;
   padding: 8px 12px;
+}
+button:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.14);
+  border-color: rgba(167, 139, 250, 0.52);
 }
 .document-view {
   display: grid;
@@ -568,7 +578,7 @@ button {
   margin-bottom: 8px;
 }
 .pdf-placeholder p {
-  color: var(--muted);
+  color: var(--workflow-muted);
   margin-bottom: 14px;
 }
 .fields-pane {
@@ -589,7 +599,7 @@ button {
   font-size: 1.1em;
 }
 .form-head p {
-  color: var(--muted);
+  color: var(--workflow-muted);
   font-size: 0.9em;
 }
 .extraction-note {
@@ -601,7 +611,7 @@ button {
   padding: 10px 12px;
 }
 label {
-  color: var(--muted);
+  color: var(--workflow-muted);
   display: grid;
   gap: 5px;
   font-size: 0.88em;
@@ -614,12 +624,17 @@ label {
 input,
 select,
 textarea {
-  border: 1px solid var(--border);
+  border: 1px solid var(--workflow-line);
   border-radius: 8px;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--workflow-input);
+  color: var(--workflow-text);
   font: inherit;
   padding: 10px 12px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-color: var(--workflow-accent-2);
 }
 label.caution input,
 label.caution select {
@@ -638,16 +653,19 @@ textarea {
   gap: 10px;
 }
 .form-actions button[type="submit"] {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--workflow-accent), #5b5df6);
+  border-color: transparent;
   color: white;
   font-weight: 600;
+}
+.form-actions button[type="submit"]:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
 .secondary {
   color: #fca5a5;
 }
 .empty {
-  color: var(--muted);
+  color: var(--workflow-muted);
   margin: 40px auto;
   max-width: 720px;
   padding: 28px;
@@ -673,7 +691,7 @@ textarea {
   width: 42px;
 }
 .caught-up h2 {
-  color: var(--text);
+  color: var(--workflow-text);
   font-size: 1.35em;
   margin-bottom: 8px;
 }
@@ -688,17 +706,17 @@ textarea {
   justify-content: center;
 }
 .empty-actions a {
-  background: var(--accent);
-  border: 1px solid var(--accent);
+  background: linear-gradient(135deg, var(--workflow-accent), #5b5df6);
+  border: 1px solid transparent;
   border-radius: 8px;
   color: white;
   font-weight: 600;
   padding: 9px 13px;
 }
 .empty-actions .secondary-link {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
+  border-color: var(--workflow-line);
+  color: var(--workflow-text);
 }
 .error {
   color: #fca5a5;

@@ -224,6 +224,7 @@ function handleError(err) {
 .compliance-page {
   display: grid;
   gap: 1.5rem;
+  padding: 16px 24px 64px;
 }
 .compliance-page > header {
   display: flex;
@@ -233,25 +234,35 @@ function handleError(err) {
 }
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
-  color: var(--muted, #6b7280);
+  letter-spacing: 0;
+  font-size: 0.78em;
+  font-weight: 700;
+  color: var(--workflow-eyebrow);
   margin: 0 0 0.25rem;
 }
 .card {
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e5e7eb);
-  border-radius: 12px;
+  background: linear-gradient(180deg, var(--workflow-panel-strong), var(--workflow-panel));
+  border: 1px solid var(--workflow-line);
+  border-radius: 10px;
+  box-shadow: var(--workflow-panel-shadow);
   padding: 1.25rem 1.5rem;
   display: grid;
   gap: 1rem;
 }
+.card:hover {
+  border-color: rgba(147, 197, 253, 0.28);
+}
 .card > header h2 {
   margin: 0 0 0.25rem;
+  font-size: 1.08em;
 }
 .card > header p {
   margin: 0;
-  color: var(--muted, #6b7280);
+  color: var(--workflow-muted);
+}
+.card > header .eyebrow {
+  color: var(--workflow-eyebrow);
+  margin-bottom: 0.25rem;
 }
 .row {
   display: flex;
@@ -262,40 +273,97 @@ function handleError(err) {
 .row label {
   display: flex;
   flex-direction: column;
+  color: var(--workflow-muted);
   font-size: 0.85rem;
   gap: 0.25rem;
 }
 .row select,
 .row input[type='month'] {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border, #d1d5db);
+  background: var(--workflow-input);
+  color: var(--workflow-text);
+  font: inherit;
+  padding: 0.58rem 0.75rem;
+  border: 1px solid var(--workflow-line);
   border-radius: 8px;
   min-width: 12rem;
 }
+.row select:focus-visible,
+.row input[type='month']:focus-visible {
+  outline-color: var(--workflow-accent-2);
+}
 .row button {
-  padding: 0.55rem 1rem;
+  background: linear-gradient(135deg, var(--workflow-accent), #5b5df6);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  min-height: 42px;
+  padding: 0.58rem 1rem;
+}
+.row button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
+}
+.row button:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 table {
+  background: var(--workflow-input);
+  border: 1px solid var(--workflow-soft-line);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
   width: 100%;
-  border-collapse: collapse;
 }
 th,
 td {
   padding: 0.55rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  border-bottom: 1px solid var(--workflow-soft-line);
+}
+th {
+  color: var(--workflow-muted);
+  font-size: 0.78em;
+  text-transform: uppercase;
+}
+td {
+  color: var(--workflow-text);
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+tbody tr:hover {
+  background: rgba(148, 163, 184, 0.05);
 }
 tr.urgent {
-  background: rgba(239, 68, 68, 0.08);
+  background: rgba(248, 113, 113, 0.1);
 }
 tr.soon {
-  background: rgba(234, 179, 8, 0.08);
+  background: rgba(250, 204, 21, 0.09);
 }
 .empty {
-  color: var(--muted, #6b7280);
-  font-style: italic;
+  color: var(--workflow-muted);
 }
 .error {
-  color: #b91c1c;
+  color: #fda4af;
+}
+@media (max-width: 760px) {
+  .compliance-page > header,
+  .row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .row select,
+  .row input[type='month'],
+  .row button {
+    width: 100%;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+  }
 }
 </style>

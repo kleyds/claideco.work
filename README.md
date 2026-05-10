@@ -30,8 +30,10 @@ PesoBooks is bookkeeping infrastructure for Filipino accounting firms. It curren
 - BIR compliance exports: SLSP, SAWT, 4-column journal, upcoming deadlines.
 - Client portal: tokenized public upload links, mobile-first upload page, expiry/limit/revoke controls, receipt comments, and bookkeeper replies.
 - Portal notifications for new client uploads and portal comments via best-effort SMTP email.
+- Unified dark workflow UI across review, archive, bank reconciliation, and BIR compliance.
+- Client homepage "Back to workspace" confirmation; workflow tabs keep direct "Back to client" navigation.
 
-PDF files are stored, previewed in-app as rendered page images with page navigation, and OCRed by rendering pages with PyMuPDF.
+PDF files are stored and previewed in-app as rendered page images with page navigation. PyMuPDF extracts embedded PDF text and renders scanned PDF pages; Tesseract OCR is required for image OCR and scanned PDF page OCR.
 
 ## Prerequisites
 
@@ -50,6 +52,7 @@ PDF files are stored, previewed in-app as rendered page images with page navigat
    - Windows: install from UB-Mannheim builds and set `TESSERACT_CMD` if it is not on PATH.
    - macOS: `brew install tesseract`
    - Linux: `sudo apt install tesseract-ocr`
+   - `pytesseract` is only the Python wrapper. The native `tesseract` executable must also be installed or OCR will fail with a PATH error.
 5. OpenAI API key for extraction.
 6. SMTP credentials for sending verification emails (Gmail, SendGrid, Mailgun, etc.). For Gmail, use an [app password](https://support.google.com/accounts/answer/185833) and set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`.
 7. PyMuPDF is installed from `backend/requirements.txt` for PDF OCR; no Poppler install is required.
@@ -165,6 +168,11 @@ Key routes:
 - `/app/clients/:id/compliance`
 - `/portal/:token` (public client upload page)
 
+Client navigation behavior:
+
+- `/app/clients/:id` uses `Back to workspace` and asks for Yes/No confirmation before returning to `/app`.
+- Workflow routes such as review, archive, reconciliation, and compliance use `Back to client` and navigate directly within the selected client.
+
 ## Verification
 
 Backend:
@@ -180,6 +188,8 @@ Frontend:
 cd frontend
 npm.cmd run build
 ```
+
+Recent UI verification should include the client homepage confirmation modal, workflow tab navigation labels, global date/month picker icons on dark inputs, and the bank reconciliation CSV import layout.
 
 ## Important API Areas
 

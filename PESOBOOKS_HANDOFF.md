@@ -48,6 +48,7 @@ Stack:
 - App header switches from public Claideco navigation to PesoBooks navigation on `/app` routes
 - Client detail metadata is collapsed by default so upload and workflow actions stay above the fold
 - Client detail uses compact upload/workflow/portal panels with hover/focus tooltips for helper copy and a tab-like workflow navigation row
+- Client detail uses "Back to workspace" with a Yes/No confirmation modal before returning to `/app`; workflow tabs keep direct "Back to client" links
 
 ### Receipt/Invoice Workflow
 - Receipt models: `receipts`, `receipt_data`, `line_items`
@@ -89,6 +90,8 @@ Stack:
 - Document previews are anchored to the top center so zoomed-out PDFs do not float below blank space
 - Review queue cards clamp long file names so PDF names do not overflow the sidebar
 - Empty review queue shows an "You're all caught up" state with upload/archive actions
+- Review, archive, reconciliation, and compliance workflow pages now share the dark Client Detail workspace styling, compact headers, polished panels, and consistent form/table controls
+- Global date/month picker icons are brightened for the dark theme
 
 ### Archive/Export
 - `/app/clients/:id/archive`
@@ -167,6 +170,7 @@ Stack:
 - Bulk categorization:
   - `PATCH /v1/clients/{id}/bank/transactions/category`
 - `/app/clients/:id/reconciliation` includes unreconciled entries, suggested matches, manual search, reconciled entries, undo match, and Form 2307 follow-up
+- Bank reconciliation uses compact section eyebrows, hover/focus tooltips for helper copy, a styled CSV file picker, and contained import controls to avoid overflow
 
 ### Form 2307 Tracking
 - Reconciliation-level 2307 status fields:
@@ -225,6 +229,14 @@ Frontend:
 - `frontend/src/views/ClientReconciliation.vue`
 - `frontend/src/views/ClientCompliance.vue`
 - `frontend/src/views/ClientPortalUpload.vue` (public, no app chrome)
+- `frontend/src/style.css` (global app tokens and dark date/month picker indicator styling)
+
+## OCR Notes
+
+- `pytesseract` is a Python wrapper only; the native `tesseract` executable must be installed locally.
+- `TESSERACT_CMD` in `backend/.env` can point to `tesseract.exe` when it is not on PATH.
+- PyMuPDF handles PDF text extraction and PDF/page preview rendering. Scanned PDF pages still require Tesseract after PyMuPDF renders them to images.
+- If Tesseract is missing, receipt processing can show `tesseract is not installed or it's not in your PATH` in the review queue.
 
 ## Known Gaps / Needs Completion
 

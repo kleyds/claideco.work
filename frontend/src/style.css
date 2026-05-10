@@ -10,6 +10,18 @@
   --code-bg: #0a0c11;
   --max-width: 1080px;
   --app-max-width: 1440px;
+  --workflow-panel: #151b2a;
+  --workflow-panel-strong: #1b2334;
+  --workflow-input: #0d1322;
+  --workflow-line: #2a3550;
+  --workflow-soft-line: rgba(148, 163, 184, 0.16);
+  --workflow-text: #f8fafc;
+  --workflow-muted: #a7b0c0;
+  --workflow-eyebrow: #93c5fd;
+  --workflow-accent: #7c3aed;
+  --workflow-accent-2: #14b8a6;
+  --workflow-danger: #fb7185;
+  --workflow-panel-shadow: 0 18px 50px rgba(2, 6, 23, 0.18);
 }
 
 * {
@@ -74,6 +86,18 @@ textarea:focus-visible,
 label.file-picker:focus-within {
   outline: 2px solid var(--accent-hover);
   outline-offset: 2px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(82%) sepia(18%) saturate(434%) hue-rotate(185deg) brightness(104%) contrast(93%);
+  opacity: 0.92;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 code, pre {
