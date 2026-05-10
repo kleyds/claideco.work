@@ -12,7 +12,7 @@
 
     <details v-if="client" class="client-details">
       <summary>
-        <span>Client details</span>
+        <span class="eyebrow">Client details</span>
         <strong>{{ client.tin || 'TIN not set' }} · {{ softwareLabel(client.software) }}</strong>
       </summary>
       <section class="detail-grid">
@@ -38,8 +38,15 @@
     <section class="upload-panel">
       <div>
         <p class="eyebrow">Batch upload</p>
-        <h2>Invoices and receipts</h2>
-        <p>Upload up to 50 JPEG, PNG, WebP, or PDF files. Documents will be queued for OCR extraction immediately.</p>
+        <h2
+          class="title-row hover-tooltip"
+          tabindex="0"
+          aria-label="Invoices and receipts. Upload up to 50 JPEG, PNG, WebP, or PDF files. Documents will be queued for OCR extraction immediately."
+          data-tooltip="Upload up to 50 JPEG, PNG, WebP, or PDF files. Documents will be queued for OCR extraction immediately."
+        >
+          Invoices and receipts
+          <span class="info-tooltip" aria-hidden="true">?</span>
+        </h2>
       </div>
       <form @submit.prevent="uploadFiles">
         <label :class="['file-picker', { selected: selectedFiles.length > 0 }]">
@@ -60,31 +67,57 @@
       <p v-if="uploadMessage" class="notice">{{ uploadMessage }}</p>
     </section>
 
-    <section class="workflows">
-      <router-link :to="`/app/clients/${clientId}/review`">
-        <h2>Review queue</h2>
-        <p>Invoice split-screen validation lands after batch upload.</p>
+    <section class="workflow-panel">
+      <p class="eyebrow">Workflows</p>
+      <nav class="workflows" aria-label="Client workflows">
+      <router-link
+        :to="`/app/clients/${clientId}/review`"
+        aria-label="Review queue. Invoice split-screen validation lands after batch upload."
+        data-tooltip="Invoice split-screen validation lands after batch upload."
+      >
+        <span>Review queue</span>
+        <span class="sr-only">Invoice split-screen validation lands after batch upload.</span>
       </router-link>
-      <router-link :to="`/app/clients/${clientId}/archive`">
-        <h2>Archive</h2>
-        <p>Search approved documents and export BIR-ready reports.</p>
+      <router-link
+        :to="`/app/clients/${clientId}/archive`"
+        aria-label="Archive. Search approved documents and export BIR-ready reports."
+        data-tooltip="Search approved documents and export BIR-ready reports."
+      >
+        <span>Archive</span>
+        <span class="sr-only">Search approved documents and export BIR-ready reports.</span>
       </router-link>
-      <router-link :to="`/app/clients/${clientId}/reconciliation`">
-        <h2>Bank reconciliation</h2>
-        <p>Import bank CSVs and find invoice matches with withholding variance checks.</p>
+      <router-link
+        :to="`/app/clients/${clientId}/reconciliation`"
+        aria-label="Bank reconciliation. Import bank CSVs and find invoice matches with withholding variance checks."
+        data-tooltip="Import bank CSVs and find invoice matches with withholding variance checks."
+      >
+        <span>Bank reconciliation</span>
+        <span class="sr-only">Import bank CSVs and find invoice matches with withholding variance checks.</span>
       </router-link>
-      <router-link :to="`/app/clients/${clientId}/compliance`">
-        <h2>BIR compliance</h2>
-        <p>SLSP, SAWT, 4-column journal, and upcoming BIR filing deadlines.</p>
+      <router-link
+        :to="`/app/clients/${clientId}/compliance`"
+        aria-label="BIR compliance. SLSP, SAWT, 4-column journal, and upcoming BIR filing deadlines."
+        data-tooltip="SLSP, SAWT, 4-column journal, and upcoming BIR filing deadlines."
+      >
+        <span>BIR compliance</span>
+        <span class="sr-only">SLSP, SAWT, 4-column journal, and upcoming BIR filing deadlines.</span>
       </router-link>
+      </nav>
     </section>
 
     <section class="portal-panel">
       <div class="section-head">
         <div>
           <p class="eyebrow">Client portal</p>
-          <h2>Public upload links</h2>
-          <p class="muted">Share a link so the client can drop receipts straight into the queue from their phone — no login required.</p>
+          <h2
+            class="title-row hover-tooltip"
+            tabindex="0"
+            aria-label="Public upload links. Share a link so the client can drop receipts straight into the queue from their phone. No login required."
+            data-tooltip="Share a link so the client can drop receipts straight into the queue from their phone. No login required."
+          >
+            Public upload links
+            <span class="info-tooltip" aria-hidden="true">?</span>
+          </h2>
           <p class="activity">
             Portal activity: <strong>{{ totalUnreadPortalComments }}</strong> unread client comment{{ totalUnreadPortalComments === 1 ? '' : 's' }}
           </p>
@@ -142,7 +175,10 @@
 
     <section class="receipt-list">
       <div class="section-head">
-        <h2>Recent uploads</h2>
+        <div>
+          <p class="eyebrow">Uploads</p>
+          <h2 class="title-row">Recent uploads</h2>
+        </div>
         <button type="button" @click="loadReceipts">Refresh</button>
       </div>
       <div v-if="receipts.length === 0" class="empty">
@@ -450,6 +486,17 @@ function formatConfidence(value) {
 
 <style scoped>
 .detail-page {
+  --detail-bg: #0b1020;
+  --detail-panel: #151b2a;
+  --detail-panel-strong: #1b2334;
+  --detail-input: #0d1322;
+  --detail-line: #2a3550;
+  --detail-soft-line: rgba(148, 163, 184, 0.16);
+  --detail-text: #f8fafc;
+  --detail-muted: #a7b0c0;
+  --detail-accent: #7c3aed;
+  --detail-accent-2: #14b8a6;
+  --detail-danger: #fb7185;
   padding: 16px 24px 64px;
 }
 header {
@@ -460,57 +507,137 @@ header {
   margin-bottom: 28px;
 }
 .eyebrow {
-  color: var(--accent-hover);
+  color: #93c5fd;
   font-size: 0.78em;
   font-weight: 700;
+  letter-spacing: 0;
   margin-bottom: 4px;
   text-transform: uppercase;
 }
+.title-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+.hover-tooltip {
+  cursor: help;
+  position: relative;
+}
+.hover-tooltip::after,
+.workflows a::before {
+  background: #111827;
+  border: 1px solid var(--detail-line);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  content: attr(data-tooltip);
+  font-size: 0.78rem;
+  font-weight: 500;
+  left: 50%;
+  line-height: 1.45;
+  max-width: min(300px, calc(100vw - 48px));
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  text-transform: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  visibility: hidden;
+  width: max-content;
+  z-index: 20;
+}
+.hover-tooltip:hover::after,
+.hover-tooltip:focus-visible::after,
+.workflows a:hover::before,
+.workflows a:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+.hover-tooltip:focus-visible {
+  outline: 2px solid var(--detail-accent-2);
+  outline-offset: 4px;
+}
+.info-tooltip {
+  align-items: center;
+  background: rgba(124, 58, 237, 0.14);
+  border: 1px solid rgba(167, 139, 250, 0.32);
+  border-radius: 999px;
+  color: #c4b5fd;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 800;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  width: 18px;
+}
+.hover-tooltip:hover .info-tooltip,
+.hover-tooltip:focus-visible .info-tooltip {
+  background: rgba(20, 184, 166, 0.14);
+  border-color: rgba(45, 212, 191, 0.48);
+  color: #99f6e4;
+}
+.sr-only {
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
 .client-details,
-.workflows,
+.workflow-panel,
 .receipt-list {
   margin-top: 28px;
 }
-.workflows {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-}
 .client-details {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--detail-panel);
+  border: 1px solid var(--detail-line);
+  border-radius: 10px;
   margin-bottom: 18px;
 }
 .client-details summary {
   align-items: center;
   cursor: pointer;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   gap: 16px;
-  justify-content: space-between;
   list-style: none;
   padding: 14px 18px;
 }
 .client-details summary::-webkit-details-marker {
   display: none;
 }
-.client-details summary span {
-  color: var(--text);
-  font-weight: 600;
+.client-details summary .eyebrow {
+  color: #93c5fd;
+  font-size: 0.78em;
+  font-weight: 700;
+  margin-bottom: 0;
+  text-transform: uppercase;
 }
 .client-details summary strong {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.9em;
   font-weight: 500;
+  line-height: 1;
 }
 .client-details summary::after {
-  color: var(--muted);
+  color: var(--detail-muted);
   content: "Show";
   font-size: 0.85em;
-  margin-left: auto;
+  justify-self: end;
 }
 .client-details[open] summary {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--detail-line);
 }
 .client-details[open] summary::after {
   content: "Hide";
@@ -521,31 +648,66 @@ header {
   gap: 12px;
   padding: 14px;
 }
-.detail-grid div,
-.workflows a,
-.workflows div {
-  background: var(--surface);
-  border: 1px solid var(--border);
+.detail-grid div {
+  background: var(--detail-input);
+  border: 1px solid var(--detail-soft-line);
   border-radius: 8px;
-  color: var(--text);
+  color: var(--detail-text);
   padding: 20px;
 }
 .workflows a {
-  transition: border-color 0.14s ease, background-color 0.14s ease, transform 0.08s ease;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--detail-text);
+  display: inline-flex;
+  flex: 1 1 160px;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 0;
+  padding: 8px 12px;
+  position: relative;
+  text-align: center;
+  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease, transform 0.08s ease;
 }
-.workflows a:hover {
-  background: var(--surface-2);
-  border-color: var(--accent);
+.workflows a::after {
+  background: linear-gradient(90deg, var(--detail-accent), var(--detail-accent-2));
+  border-radius: 999px;
+  bottom: 5px;
+  content: "";
+  height: 2px;
+  left: 18px;
+  opacity: 0;
+  position: absolute;
+  right: 18px;
+  transform: scaleX(0.55);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+.workflows a:hover,
+.workflows a:focus-visible,
+.workflows a.router-link-active {
+  background: rgba(124, 58, 237, 0.16);
+  border-color: rgba(167, 139, 250, 0.42);
+  color: var(--detail-text);
+  outline: none;
+}
+.workflows a:hover::after,
+.workflows a:focus-visible::after,
+.workflows a.router-link-active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 .workflows a:active {
   transform: translateY(1px) scale(0.996);
 }
 .detail-grid div {
-  background: var(--bg);
+  background: var(--detail-input);
   padding: 14px;
 }
 .detail-grid span {
-  color: var(--muted);
+  color: var(--detail-muted);
   display: block;
   font-size: 0.8em;
   margin-bottom: 4px;
@@ -554,21 +716,29 @@ header {
 .detail-grid strong {
   font-size: 1em;
 }
-.workflows h2 {
-  font-size: 1.05em;
-  margin-bottom: 8px;
-}
-.workflows p {
-  color: var(--muted);
-  font-size: 0.94em;
-}
 .upload-panel,
+.workflow-panel,
 .receipt-list,
 .portal-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: linear-gradient(180deg, var(--detail-panel-strong), var(--detail-panel));
+  border: 1px solid var(--detail-line);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.18);
   padding: 20px;
+}
+.workflow-panel {
+  display: grid;
+  gap: 12px;
+}
+.workflows {
+  align-items: stretch;
+  background: var(--detail-input);
+  border: 1px solid var(--detail-soft-line);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
 }
 .portal-panel {
   margin-top: 28px;
@@ -576,17 +746,17 @@ header {
   gap: 16px;
 }
 .portal-panel .muted {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.92em;
   margin-top: 4px;
 }
 .activity {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.9em;
   margin-top: 8px;
 }
 .activity strong {
-  color: var(--text);
+  color: var(--detail-text);
 }
 .link-form {
   display: grid;
@@ -598,16 +768,16 @@ header {
   display: flex;
   flex-direction: column;
   font-size: 0.78em;
-  color: var(--muted);
+  color: var(--detail-muted);
   text-transform: uppercase;
   gap: 4px;
 }
 .link-form input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 8px 10px;
+  background: var(--detail-input);
+  border: 1px solid var(--detail-line);
+  border-radius: 8px;
+  color: var(--detail-text);
+  padding: 9px 10px;
 }
 .link-table .url {
   display: flex;
@@ -615,45 +785,69 @@ header {
   align-items: center;
 }
 .link-table .url code {
-  background: var(--bg);
-  border-radius: 4px;
+  background: var(--detail-input);
+  border: 1px solid var(--detail-soft-line);
+  border-radius: 6px;
+  display: inline-block;
   font-size: 0.82em;
+  max-width: 460px;
+  overflow: hidden;
   padding: 4px 6px;
-  word-break: break-all;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .link-table .copy {
   font-size: 0.82em;
-  padding: 4px 8px;
+  min-height: 0;
+  padding: 5px 9px;
 }
 .link-table tr.revoked {
   opacity: 0.55;
 }
 button.danger {
-  border-color: rgba(248, 113, 113, 0.45);
-  color: #fca5a5;
+  border-color: rgba(251, 113, 133, 0.45);
+  color: #fda4af;
   font-size: 0.85em;
   padding: 6px 10px;
+}
+button.danger:hover:not(:disabled) {
+  background: rgba(251, 113, 133, 0.1);
+  border-color: rgba(251, 113, 133, 0.72);
+  color: #fecdd3;
 }
 .comment-button {
   font-size: 0.85em;
   padding: 6px 10px;
 }
 .comment-button span {
-  color: #fca5a5;
+  color: #fda4af;
 }
 .upload-panel {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 20px;
+  gap: 22px;
   align-items: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
-.upload-panel h2 {
-  font-size: 1.1em;
-  margin-bottom: 6px;
+.upload-panel h2,
+.portal-panel h2,
+.receipt-list h2 {
+  font-size: 1.08em;
+}
+.upload-panel .eyebrow,
+.portal-panel .eyebrow,
+.workflow-panel .eyebrow,
+.receipt-list .eyebrow {
+  color: #93c5fd;
+  font-size: 0.78em;
+  font-weight: 700;
+}
+.title-row .info-tooltip {
+  margin-left: 2px;
+  transform: translateY(-1px);
 }
 .upload-panel p {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.94em;
 }
 .upload-panel form {
@@ -666,10 +860,10 @@ button.danger {
 }
 .file-picker {
   align-items: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--detail-input);
+  border: 1px solid var(--detail-line);
   border-radius: 8px;
-  color: var(--muted);
+  color: var(--detail-muted);
   display: grid;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr);
@@ -678,19 +872,19 @@ button.danger {
 }
 .file-picker:hover,
 .file-picker.selected {
-  border-color: var(--accent);
+  border-color: rgba(20, 184, 166, 0.7);
 }
 .file-picker.selected strong {
-  color: var(--text);
+  color: var(--detail-text);
 }
 .file-picker input {
   display: none;
 }
 .file-picker span {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--detail-soft-line);
   border-radius: 6px;
-  color: var(--text);
+  color: var(--detail-text);
   cursor: pointer;
   font-size: 0.92em;
   font-weight: 600;
@@ -705,20 +899,27 @@ button.danger {
   white-space: nowrap;
 }
 button {
-  border: 1px solid var(--border);
+  border: 1px solid var(--detail-line);
   border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--detail-text);
   cursor: pointer;
   font: inherit;
   padding: 10px 14px;
 }
 button[type="submit"] {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--detail-accent), #5b5df6);
+  border-color: transparent;
   color: white;
   font-weight: 600;
   min-height: 48px;
+}
+button:hover:not(:disabled) {
+  border-color: rgba(167, 139, 250, 0.52);
+  background: rgba(148, 163, 184, 0.14);
+}
+button[type="submit"]:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
 button:disabled {
   cursor: wait;
@@ -737,18 +938,22 @@ button:disabled {
 }
 table {
   border-collapse: collapse;
+  font-size: 0.94em;
   width: 100%;
 }
 th,
 td {
-  border-bottom: 1px solid var(--border);
-  padding: 10px 8px;
+  border-bottom: 1px solid var(--detail-soft-line);
+  padding: 11px 8px;
   text-align: left;
 }
 th {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.78em;
   text-transform: uppercase;
+}
+tbody tr:hover {
+  background: rgba(148, 163, 184, 0.05);
 }
 .status {
   border-radius: 999px;
@@ -770,10 +975,10 @@ th {
   color: #fca5a5;
 }
 .empty {
-  color: var(--muted);
+  color: var(--detail-muted);
 }
 .error {
-  color: #fca5a5;
+  color: #fda4af;
 }
 .comment-overlay {
   align-items: center;
@@ -789,8 +994,8 @@ th {
   z-index: 50;
 }
 .comment-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--detail-panel);
+  border: 1px solid var(--detail-line);
   border-radius: 8px;
   display: grid;
   gap: 16px;
@@ -807,13 +1012,13 @@ th {
   gap: 10px;
 }
 .comment {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--detail-input);
+  border: 1px solid var(--detail-line);
   border-radius: 8px;
   padding: 12px;
 }
 .comment.bookkeeper {
-  border-color: var(--accent);
+  border-color: var(--detail-accent);
 }
 .comment div {
   display: flex;
@@ -821,7 +1026,7 @@ th {
   justify-content: space-between;
 }
 .comment span {
-  color: var(--muted);
+  color: var(--detail-muted);
   font-size: 0.8em;
 }
 .comment p {
@@ -833,17 +1038,17 @@ th {
   gap: 10px;
 }
 .comment-form label {
-  color: var(--muted);
+  color: var(--detail-muted);
   display: grid;
   font-size: 0.78em;
   gap: 5px;
   text-transform: uppercase;
 }
 .comment-form textarea {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--detail-input);
+  border: 1px solid var(--detail-line);
   border-radius: 8px;
-  color: var(--text);
+  color: var(--detail-text);
   font: inherit;
   min-height: 110px;
   padding: 10px;
@@ -854,6 +1059,10 @@ th {
   header {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .workflows a {
+    flex-basis: calc(50% - 4px);
+    padding-inline: 8px;
   }
   .upload-panel {
     grid-template-columns: 1fr;
@@ -868,6 +1077,11 @@ th {
   }
   .link-form {
     grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 420px) {
+  .workflows a {
+    flex-basis: 100%;
   }
 }
 </style>

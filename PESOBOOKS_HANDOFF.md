@@ -47,6 +47,7 @@ Stack:
 - Dashboard cards show real counts for unprocessed invoices, unreconciled bank entries, missing/outstanding 2307s, and total open work
 - App header switches from public Claideco navigation to PesoBooks navigation on `/app` routes
 - Client detail metadata is collapsed by default so upload and workflow actions stay above the fold
+- Client detail uses compact upload/workflow/portal panels with hover/focus tooltips for helper copy and a tab-like workflow navigation row
 
 ### Receipt/Invoice Workflow
 - Receipt models: `receipts`, `receipt_data`, `line_items`
